@@ -6,4 +6,5 @@
 #run_logged $PALAWAN_INSTALL/packages/ai-cli/codex-cli.sh
 #run_logged $PALAWAN_INSTALL/packages/ai-cli/gemini-cli.sh
 #run_logged $PALAWAN_INSTALL/packages/ai-cli/claude-cli.sh
-run_logged $PALAWAN_INSTALL/packages/fonts.sh
+#run_logged $PALAWAN_INSTALL/packages/fonts.sh
+run_logged $PALAWAN_INSTALL/browsers/firefox.sh
