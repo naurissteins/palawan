@@ -6,7 +6,7 @@ install_codex_cli() {
         return 1
     fi
 
-    npm install -g @openai/codex
+    npm install -g @openai/codex --loglevel=info --progress=true
 }
 
 if ask_yes_no "Install Codex CLI?"; then
