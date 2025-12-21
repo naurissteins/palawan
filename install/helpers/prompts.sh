@@ -30,6 +30,15 @@ ask_yes_no() {
 }
 
 print_section() {
+    local text="$1"
+    local width border
+
     init_prompt_colors
-    printf '%b\n' "${SECTION_COLOR}$1${RESET_COLOR}"
+
+    width=${#text}
+    border=$(printf '%*s' $((width + 2)) '' | tr ' ' '-')
+
+    printf '%b\n' "${SECTION_COLOR}+${border}+${RESET_COLOR}"
+    printf '%b\n' "${SECTION_COLOR}| ${text} |${RESET_COLOR}"
+    printf '%b\n' "${SECTION_COLOR}+${border}+${RESET_COLOR}"
 }
