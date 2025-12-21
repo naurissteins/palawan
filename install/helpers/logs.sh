@@ -3,6 +3,26 @@ log_line() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$message" >>"$PALAWAN_INSTALL_LOG_FILE"
 }
 
+log_init_colors() {
+  if [ -n "${LOG_COLORS_INIT:-}" ]; then
+    return
+  fi
+
+  if [ -t 1 ]; then
+    ANSI_RESET=$'\033[0m'
+    ANSI_DIM=$'\033[2m'
+    ANSI_GREEN=$'\033[32m'
+    ANSI_RED=$'\033[31m'
+  else
+    ANSI_RESET=""
+    ANSI_DIM=""
+    ANSI_GREEN=""
+    ANSI_RED=""
+  fi
+
+  LOG_COLORS_INIT=1
+}
+
 start_install_log() {
   mkdir -p "$(dirname "$PALAWAN_INSTALL_LOG_FILE")"
   : >"$PALAWAN_INSTALL_LOG_FILE"
@@ -11,6 +31,8 @@ start_install_log() {
   PALAWAN_START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 
   log_line "=== Palawan Installation Started: $PALAWAN_START_TIME ==="
+  log_init_colors
+  printf '%b\n' "${ANSI_GREEN}Starting Palawan installation...${ANSI_RESET}"
 }
 
 stop_install_log() {
@@ -33,6 +55,8 @@ stop_install_log() {
 
     log_line "================================="
     log_line "Rebooting system..."
+    log_init_colors
+    printf '%b\n' "${ANSI_GREEN}Installation complete. Rebooting system...${ANSI_RESET}"
   fi
 }
 
@@ -43,7 +67,11 @@ run_logged() {
 
   log_line "Starting: $script"
 
-  bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 | tee -a "$PALAWAN_INSTALL_LOG_FILE"
+  log_init_colors
+  bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 | while IFS= read -r line; do
+    printf '%b\n' "${ANSI_DIM}${line}${ANSI_RESET}"
+    printf '%s\n' "$line" >>"$PALAWAN_INSTALL_LOG_FILE"
+  done
   local exit_code=${PIPESTATUS[0]}
 
   if [ $exit_code -eq 0 ]; then
@@ -51,6 +79,8 @@ run_logged() {
     unset CURRENT_SCRIPT
   else
     log_line "Failed: $script (exit code: $exit_code)"
+    log_init_colors
+    printf '%b\n' "${ANSI_RED}Failed: $script (exit code: $exit_code)${ANSI_RESET}"
   fi
 
   return $exit_code
