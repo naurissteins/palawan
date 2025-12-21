@@ -68,13 +68,7 @@ run_logged() {
   log_line "Starting: $script"
 
   log_init_colors
-  if [ -t 1 ]; then
-    bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 \
-      | tee -a "$PALAWAN_INSTALL_LOG_FILE" \
-      | { printf '%b' "$ANSI_DIM"; cat; printf '%b' "$ANSI_RESET"; }
-  else
-    bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 | tee -a "$PALAWAN_INSTALL_LOG_FILE"
-  fi
+  bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 | tee -a "$PALAWAN_INSTALL_LOG_FILE"
   local exit_code=${PIPESTATUS[0]}
 
   if [ $exit_code -eq 0 ]; then
