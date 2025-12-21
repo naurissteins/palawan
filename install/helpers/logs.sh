@@ -24,9 +24,9 @@ start_log_output() {
         line="${current_lines[i]:-}"
 
         # Truncate if needed
-        if [ ${#line} -gt $max_line_width ]; then
-          line="${line:0:$max_line_width}..."
-        fi
+        # if [ ${#line} -gt $max_line_width ]; then
+        #   line="${line:0:$max_line_width}..."
+        # fi
 
         # Add clear line escape and formatted output for each line
         if [ -n "$line" ]; then
