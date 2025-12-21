@@ -11,8 +11,8 @@ export PATH="$PALAWAN_PATH/bin:$PATH"
 
 # Install
 source "$PALAWAN_INSTALL/helpers/all.sh"
-source "$PALAWAN_INSTALL/preflight/all.sh"
-source "$PALAWAN_INSTALL/packaging/all.sh"
-source "$PALAWAN_INSTALL/config/all.sh"
-source "$PALAWAN_INSTALL/login/all.sh"
-source "$PALAWAN_INSTALL/post-install/all.sh"
+source "$PALAWAN_INSTALL/packages/all.sh"
+#source "$PALAWAN_INSTALL/preflight/all.sh"
+#source "$PALAWAN_INSTALL/config/all.sh"
+#source "$PALAWAN_INSTALL/login/all.sh"
+#source "$PALAWAN_INSTALL/post-install/all.sh"

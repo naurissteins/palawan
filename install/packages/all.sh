@@ -1,1 +1,1 @@
-run_logged $PALAWAN_INSTALL/packaging/base.sh
+run_logged $PALAWAN_INSTALL/packages/base.sh
