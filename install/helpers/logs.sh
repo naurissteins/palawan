@@ -1,112 +1,38 @@
-start_log_output() {
-  local ANSI_SAVE_CURSOR="\033[s"
-  local ANSI_RESTORE_CURSOR="\033[u"
-  local ANSI_CLEAR_LINE="\033[2K"
-  local ANSI_HIDE_CURSOR="\033[?25l"
-  local ANSI_RESET="\033[0m"
-  local ANSI_GRAY="\033[90m"
-
-  # Save cursor position and hide cursor
-  printf $ANSI_SAVE_CURSOR
-  printf $ANSI_HIDE_CURSOR
-
-  (
-    local log_lines=20
-    local max_line_width=$((LOGO_WIDTH - 4))
-
-    while true; do
-      # Read the last N lines into an array
-      mapfile -t current_lines < <(tail -n $log_lines "$PALAWAN_INSTALL_LOG_FILE" 2>/dev/null)
-
-      # Build complete output buffer with escape sequences
-      output=""
-      for ((i = 0; i < log_lines; i++)); do
-        line="${current_lines[i]:-}"
-
-        # Truncate if needed
-        # if [ ${#line} -gt $max_line_width ]; then
-        #   line="${line:0:$max_line_width}..."
-        # fi
-
-        # Add clear line escape and formatted output for each line
-        if [ -n "$line" ]; then
-          output+="${ANSI_CLEAR_LINE}${ANSI_GRAY}${PADDING_LEFT_SPACES}  → ${line}${ANSI_RESET}\n"
-        else
-          output+="${ANSI_CLEAR_LINE}${PADDING_LEFT_SPACES}\n"
-        fi
-      done
-
-      printf "${ANSI_RESTORE_CURSOR}%b" "$output"
-
-      sleep 0.1
-    done
-  ) &
-  monitor_pid=$!
-}
-
-stop_log_output() {
-  if [ -n "${monitor_pid:-}" ]; then
-    kill $monitor_pid 2>/dev/null || true
-    wait $monitor_pid 2>/dev/null || true
-    unset monitor_pid
-  fi
+log_line() {
+  local message="$1"
+  printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$message" >>"$PALAWAN_INSTALL_LOG_FILE"
 }
 
 start_install_log() {
-  touch "$PALAWAN_INSTALL_LOG_FILE"
+  mkdir -p "$(dirname "$PALAWAN_INSTALL_LOG_FILE")"
+  : >"$PALAWAN_INSTALL_LOG_FILE"
 
-  export PALAWAN_START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+  export PALAWAN_START_TIME
+  PALAWAN_START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 
-  echo "=== Palawan Installation Started: $PALAWAN_START_TIME ===" >>"$PALAWAN_INSTALL_LOG_FILE"
-  start_log_output
+  log_line "=== Palawan Installation Started: $PALAWAN_START_TIME ==="
 }
 
 stop_install_log() {
-  stop_log_output
-  show_cursor
-
   if [[ -n ${PALAWAN_INSTALL_LOG_FILE:-} ]]; then
-    PALAWAN_END_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "=== Palawan Installation Completed: $PALAWAN_END_TIME ===" >>"$PALAWAN_INSTALL_LOG_FILE"
+    local palawan_end_time
+    palawan_end_time=$(date '+%Y-%m-%d %H:%M:%S')
+
+    log_line "=== Palawan Installation Completed: $palawan_end_time ==="
     echo "" >>"$PALAWAN_INSTALL_LOG_FILE"
-    echo "=== Installation Time Summary ===" >>"$PALAWAN_INSTALL_LOG_FILE"
-
-    if [ -f "/var/log/archinstall/install.log" ]; then
-      ARCHINSTALL_START=$(grep -m1 '^\[' /var/log/archinstall/install.log 2>/dev/null | sed 's/^\[\([^]]*\)\].*/\1/' || true)
-      ARCHINSTALL_END=$(grep 'Installation completed without any errors' /var/log/archinstall/install.log 2>/dev/null | sed 's/^\[\([^]]*\)\].*/\1/' || true)
-
-      if [ -n "$ARCHINSTALL_START" ] && [ -n "$ARCHINSTALL_END" ]; then
-        ARCH_START_EPOCH=$(date -d "$ARCHINSTALL_START" +%s)
-        ARCH_END_EPOCH=$(date -d "$ARCHINSTALL_END" +%s)
-        ARCH_DURATION=$((ARCH_END_EPOCH - ARCH_START_EPOCH))
-
-        ARCH_MINS=$((ARCH_DURATION / 60))
-        ARCH_SECS=$((ARCH_DURATION % 60))
-
-        echo "Archinstall: ${ARCH_MINS}m ${ARCH_SECS}s" >>"$PALAWAN_INSTALL_LOG_FILE"
-      fi
-    fi
+    log_line "=== Installation Time Summary ==="
 
     if [ -n "$PALAWAN_START_TIME" ]; then
-      PALAWAN_START_EPOCH=$(date -d "$PALAWAN_START_TIME" +%s)
-      PALAWAN_END_EPOCH=$(date -d "$PALAWAN_END_TIME" +%s)
-      PALAWAN_DURATION=$((PALAWAN_END_EPOCH - PALAWAN_START_EPOCH))
+      local palawan_start_epoch palawan_end_epoch palawan_duration
+      palawan_start_epoch=$(date -d "$PALAWAN_START_TIME" +%s)
+      palawan_end_epoch=$(date -d "$palawan_end_time" +%s)
+      palawan_duration=$((palawan_end_epoch - palawan_start_epoch))
 
-      PALAWAN_MINS=$((PALAWAN_DURATION / 60))
-      PALAWAN_SECS=$((PALAWAN_DURATION % 60))
-
-      echo "Palawan:     ${PALAWAN_MINS}m ${PALAWAN_SECS}s" >>"$PALAWAN_INSTALL_LOG_FILE"
-
-      if [ -n "$ARCH_DURATION" ]; then
-        TOTAL_DURATION=$((ARCH_DURATION + PALAWAN_DURATION))
-        TOTAL_MINS=$((TOTAL_DURATION / 60))
-        TOTAL_SECS=$((TOTAL_DURATION % 60))
-        echo "Total:       ${TOTAL_MINS}m ${TOTAL_SECS}s" >>"$PALAWAN_INSTALL_LOG_FILE"
-      fi
+      printf 'Palawan:     %dm %ds\n' $((palawan_duration / 60)) $((palawan_duration % 60)) >>"$PALAWAN_INSTALL_LOG_FILE"
     fi
-    echo "=================================" >>"$PALAWAN_INSTALL_LOG_FILE"
 
-    echo "Rebooting system..." >>"$PALAWAN_INSTALL_LOG_FILE"
+    log_line "================================="
+    log_line "Rebooting system..."
   fi
 }
 
@@ -115,25 +41,16 @@ run_logged() {
 
   export CURRENT_SCRIPT="$script"
 
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting: $script" >>"$PALAWAN_INSTALL_LOG_FILE"
+  log_line "Starting: $script"
 
-  # Stop the fancy logger to allow for clean interactive output
-  stop_log_output
-
-  # Execute the script, tee-ing its output to the log file
-  # but keeping stdin/stdout/stderr connected to the terminal
   bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 | tee -a "$PALAWAN_INSTALL_LOG_FILE"
-
   local exit_code=${PIPESTATUS[0]}
 
-  # Restart the fancy logger
-  start_log_output
-
   if [ $exit_code -eq 0 ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Completed: $script" >>"$PALAWAN_INSTALL_LOG_FILE"
+    log_line "Completed: $script"
     unset CURRENT_SCRIPT
   else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Failed: $script (exit code: $exit_code)" >>"$PALAWAN_INSTALL_LOG_FILE"
+    log_line "Failed: $script (exit code: $exit_code)"
   fi
 
   return $exit_code
