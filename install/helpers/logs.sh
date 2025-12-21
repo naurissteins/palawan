@@ -68,16 +68,13 @@ run_logged() {
   log_line "Starting: $script"
 
   log_init_colors
-  local -a run_cmd
-  run_cmd=(bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'")
-  if command -v stdbuf >/dev/null 2>&1; then
-    run_cmd=(stdbuf -oL -eL "${run_cmd[@]}")
+  if [ -t 1 ]; then
+    bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 \
+      | tee -a "$PALAWAN_INSTALL_LOG_FILE" \
+      | { printf '%b' "$ANSI_DIM"; cat; printf '%b' "$ANSI_RESET"; }
+  else
+    bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 | tee -a "$PALAWAN_INSTALL_LOG_FILE"
   fi
-
-  "${run_cmd[@]}" 2>&1 | while IFS= read -r line || [ -n "$line" ]; do
-    printf '%b\n' "${ANSI_DIM}${line}${ANSI_RESET}"
-    printf '%s\n' "$line" >>"$PALAWAN_INSTALL_LOG_FILE"
-  done
   local exit_code=${PIPESTATUS[0]}
 
   if [ $exit_code -eq 0 ]; then
