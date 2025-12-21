@@ -18,7 +18,7 @@ install_web_browsers() {
         case "$choice" in
             1|firefox|f) pacman_packages+=(firefox firefox-ublock-origin);;
             2|chromium|c) pacman_packages+=(chromium);;
-            3|ungoogled-chromium|u) yay_packages+=(ungoogled-chromium-bin);;
+            3|ungoogled-chromium-bin|u) yay_packages+=(ungoogled-chromium-bin);;
             *) echo "Unknown option: $choice";;
         esac
     done
