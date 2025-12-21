@@ -68,7 +68,13 @@ run_logged() {
   log_line "Starting: $script"
 
   log_init_colors
-  bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 | while IFS= read -r line; do
+  local -a run_cmd
+  run_cmd=(bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'")
+  if command -v stdbuf >/dev/null 2>&1; then
+    run_cmd=(stdbuf -oL -eL "${run_cmd[@]}")
+  fi
+
+  "${run_cmd[@]}" 2>&1 | while IFS= read -r line || [ -n "$line" ]; do
     printf '%b\n' "${ANSI_DIM}${line}${ANSI_RESET}"
     printf '%s\n' "$line" >>"$PALAWAN_INSTALL_LOG_FILE"
   done
