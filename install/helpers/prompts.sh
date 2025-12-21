@@ -4,7 +4,7 @@ init_prompt_colors() {
         return
     fi
 
-    if [ -t 1 ]; then
+    if [ -t 1 ] || [ -t 2 ] || [ -t 0 ] || [ -w /dev/tty ]; then
         PROMPT_COLOR=$'\033[33m'
         SECTION_COLOR=$'\033[36m'
         RESET_COLOR=$'\033[0m'

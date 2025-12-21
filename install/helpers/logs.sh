@@ -68,7 +68,13 @@ run_logged() {
   log_line "Starting: $script"
 
   log_init_colors
-  bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 | tee -a "$PALAWAN_INSTALL_LOG_FILE"
+  if [ -w /dev/tty ]; then
+    bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 \
+      | tee /dev/tty \
+      | sed -E 's/\x1b\[[0-9;]*m//g' >>"$PALAWAN_INSTALL_LOG_FILE"
+  else
+    bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 | tee -a "$PALAWAN_INSTALL_LOG_FILE"
+  fi
   local exit_code=${PIPESTATUS[0]}
 
   if [ $exit_code -eq 0 ]; then
