@@ -23,6 +23,9 @@ install_nodejs() {
 
     echo "Installing latest LTS version of Node.js..."
     nvm install --lts
+    nvm use --lts
+    corepack enable
+    corepack prepare pnpm@latest --activate
 
     echo "Node.js LTS installation complete."
 }
