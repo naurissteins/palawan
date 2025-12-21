@@ -17,7 +17,6 @@ install_hyprland() {
       hyprpaper \
       hypridle \
       hyprland-guiutils \
-      hyprland-preview-share-picker \
       hyprsunset
 
     print_section "=== Setting up Hyprland config ==="
