@@ -53,8 +53,7 @@ stop_log_output() {
 }
 
 start_install_log() {
-  sudo touch "$PALAWAN_INSTALL_LOG_FILE"
-  sudo chmod 666 "$PALAWAN_INSTALL_LOG_FILE"
+  touch "$PALAWAN_INSTALL_LOG_FILE"
 
   export PALAWAN_START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 

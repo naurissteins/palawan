@@ -6,11 +6,14 @@ set -eEo pipefail
 # Define Palawan locations
 export PALAWAN_PATH="$HOME/.local/share/palawan"
 export PALAWAN_INSTALL="$PALAWAN_PATH/install"
-export PALAWAN_INSTALL_LOG_FILE="/var/log/palawan-install.log"
+export PALAWAN_INSTALL_LOG_FILE="$PALAWAN_PATH/install.log"
 export PATH="$PALAWAN_PATH/bin:$PATH"
 
 # Install
 source "$PALAWAN_INSTALL/helpers/all.sh"
+
+start_install_log
+
 source "$PALAWAN_INSTALL/packages/all.sh"
 #source "$PALAWAN_INSTALL/preflight/all.sh"
 #source "$PALAWAN_INSTALL/config/all.sh"
