@@ -8,7 +8,7 @@ install_fonts() {
       noto-fonts
 }
 
-if ask_yes_no "Install AMD drivers?"; then
-    echo "-> Installing AMD drivers..."
+if ask_yes_no "Install Fonts?"; then
+    echo "-> Installing Fonts..."
     install_fonts
 fi
