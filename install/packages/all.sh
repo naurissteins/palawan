@@ -4,5 +4,6 @@
 #run_logged $PALAWAN_INSTALL/packages/hyprland.sh
 #run_logged $PALAWAN_INSTALL/packages/nodejs.sh
 #run_logged $PALAWAN_INSTALL/packages/ai-cli/codex-cli.sh
-run_logged $PALAWAN_INSTALL/packages/ai-cli/gemini-cli.sh
-run_logged $PALAWAN_INSTALL/packages/ai-cli/claude-cli.sh
+#run_logged $PALAWAN_INSTALL/packages/ai-cli/gemini-cli.sh
+#run_logged $PALAWAN_INSTALL/packages/ai-cli/claude-cli.sh
+run_logged $PALAWAN_INSTALL/packages/fonts.sh
