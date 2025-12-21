@@ -117,10 +117,17 @@ run_logged() {
 
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting: $script" >>"$PALAWAN_INSTALL_LOG_FILE"
 
-  # Use bash -c to create a clean subshell
-  bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" >>"$PALAWAN_INSTALL_LOG_FILE" 2>&1
+  # Stop the fancy logger to allow for clean interactive output
+  stop_log_output
 
-  local exit_code=$?
+  # Execute the script, tee-ing its output to the log file
+  # but keeping stdin/stdout/stderr connected to the terminal
+  bash -c "source '$PALAWAN_INSTALL/helpers/all.sh'; source '$script'" 2>&1 | tee -a "$PALAWAN_INSTALL_LOG_FILE"
+
+  local exit_code=${PIPESTATUS[0]}
+
+  # Restart the fancy logger
+  start_log_output
 
   if [ $exit_code -eq 0 ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Completed: $script" >>"$PALAWAN_INSTALL_LOG_FILE"
