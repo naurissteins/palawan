@@ -7,6 +7,7 @@ install_hyprland() {
       xdg-desktop-portal \
       xdg-desktop-portal-hyprland \
       xdg-desktop-portal-gtk \
+      xdg-user-dirs \
       polkit-kde-agent \
       wl-clipboard \
       network-manager-applet \
@@ -17,7 +18,12 @@ install_hyprland() {
       hyprpaper \
       hypridle \
       hyprland-guiutils \
-      hyprsunset
+      hyprsunset \
+      rofi-wayland \
+      waybar
+
+    echo "Updating user directories"
+    xdg-user-dirs-update
 
     print_section "=== Setting up Hyprland config ==="
     HYPR_DIR="$HOME/.config/hypr"
