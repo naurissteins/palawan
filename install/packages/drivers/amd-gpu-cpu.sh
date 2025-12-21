@@ -1,5 +1,5 @@
 install_amd() {
-    echo "=== Installing AMD GPU & CPU drivers ==="
+    print_section "=== Installing AMD GPU & CPU drivers ==="
     sudo pacman -S --needed --noconfirm \
       mesa \
       vulkan-radeon \

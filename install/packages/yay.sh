@@ -1,5 +1,5 @@
 install_yay() {
-    echo "=== Installing AUR Helper (yay) ==="
+    print_section "=== Installing AUR Helper (yay) ==="
     sudo pacman -S --needed --noconfirm git base-devel
     if ! command -v yay &> /dev/null
     then
