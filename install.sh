@@ -16,5 +16,5 @@ if ! command -v go >/dev/null 2>&1; then
 fi
 
 mkdir -p "$PALAWAN_PATH/bin"
-go build -o "$PALAWAN_PATH/bin/palawan-installer" "$PALAWAN_PATH/cmd/installer"
+(cd "$PALAWAN_PATH" && go build -o "$PALAWAN_PATH/bin/palawan-installer" "./cmd/installer")
 "$PALAWAN_PATH/bin/palawan-installer" "$@"
