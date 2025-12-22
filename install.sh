@@ -9,13 +9,10 @@ export PALAWAN_INSTALL="$PALAWAN_PATH/install"
 export PALAWAN_INSTALL_LOG_FILE="$PALAWAN_PATH/install.log"
 export PATH="$PALAWAN_PATH/bin:$PATH"
 
-# Install
-source "$PALAWAN_INSTALL/helpers/all.sh"
+# Install via Python (shell bootstrap stays minimal)
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 is required to run the installer."
+  exit 1
+fi
 
-start_install_log
-
-source "$PALAWAN_INSTALL/packages/all.sh"
-#source "$PALAWAN_INSTALL/preflight/all.sh"
-#source "$PALAWAN_INSTALL/config/all.sh"
-#source "$PALAWAN_INSTALL/login/all.sh"
-source "$PALAWAN_INSTALL/post-install/all.sh"
+python3 "$PALAWAN_PATH/install.py" "$@"

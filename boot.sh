@@ -12,7 +12,7 @@ ansi_art='                 ▄▄▄
 clear
 echo -e "\n$ansi_art\n"
 
-sudo pacman -Syu --noconfirm --needed git
+sudo pacman -Syu --noconfirm --needed git python
 
 # Use custom repo if specified, otherwise default to balabac/palawan
 PALAWAN_REPO="${PALAWAN_REPO:-balabac/palawan}"
