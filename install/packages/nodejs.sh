@@ -3,20 +3,23 @@ install_nodejs() {
     yay -S --noconfirm nvm
 
     BASHRC_FILE="$HOME/.bashrc"
+    ZSHRC_FILE="$HOME/.zshrc"
     NVM_INIT_LINE="source /usr/share/nvm/init-nvm.sh"
 
     print_section "=== Configuring shell for nvm ==="
-    if [ ! -f "$BASHRC_FILE" ]; then
-        echo "Creating $BASHRC_FILE..."
-        touch "$BASHRC_FILE"
-    fi
+    for RC_FILE in "$BASHRC_FILE" "$ZSHRC_FILE"; do
+        if [ ! -f "$RC_FILE" ]; then
+            echo "Creating $RC_FILE..."
+            touch "$RC_FILE"
+        fi
 
-    if ! grep -qF "$NVM_INIT_LINE" "$BASHRC_FILE"; then
-        echo "Adding nvm source to $BASHRC_FILE"
-        echo -e "\n# Load nvm\n$NVM_INIT_LINE" >> "$BASHRC_FILE"
-    else
-        echo "nvm source already in $BASHRC_FILE."
-    fi
+        if ! grep -qF "$NVM_INIT_LINE" "$RC_FILE"; then
+            echo "Adding nvm source to $RC_FILE"
+            echo -e "\n# Load nvm\n$NVM_INIT_LINE" >> "$RC_FILE"
+        else
+            echo "nvm source already in $RC_FILE."
+        fi
+    done
 
     echo "Sourcing nvm for current session to install Node.js..."
     source /usr/share/nvm/init-nvm.sh
