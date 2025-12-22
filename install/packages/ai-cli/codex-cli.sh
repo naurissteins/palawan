@@ -14,7 +14,9 @@ install_codex_cli() {
     npm install -g @openai/codex --loglevel=info --progress=true
 }
 
-if ask_yes_no "Install Codex CLI?"; then
+if [ "${PALAWAN_INSTALL_CODEX_CLI:-0}" = "1" ]; then
     echo "-> Installing Codex CLI..."
     install_codex_cli
+else
+    echo "-> Skipping Codex CLI..."
 fi

@@ -14,7 +14,9 @@ install_claude_cli() {
     npm install -g @anthropic-ai/claude-code --loglevel=info --progress=true
 }
 
-if ask_yes_no "Install Claude CLI?"; then
+if [ "${PALAWAN_INSTALL_CLAUDE_CLI:-0}" = "1" ]; then
     echo "-> Installing Claude CLI..."
     install_claude_cli
+else
+    echo "-> Skipping Claude CLI..."
 fi

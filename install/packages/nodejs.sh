@@ -33,7 +33,9 @@ install_nodejs() {
     echo "Node.js LTS installation complete."
 }
 
-if ask_yes_no "Install Node.js (via nvm)?"; then
+if [ "${PALAWAN_INSTALL_NODEJS:-0}" = "1" ]; then
     echo "-> Installing Node.js..."
     install_nodejs
+else
+    echo "-> Skipping Node.js..."
 fi

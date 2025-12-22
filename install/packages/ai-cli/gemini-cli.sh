@@ -14,7 +14,9 @@ install_gemini_cli() {
     npm install -g @google/gemini-cli --loglevel=info --progress=true
 }
 
-if ask_yes_no "Install Gemini CLI?"; then
+if [ "${PALAWAN_INSTALL_GEMINI_CLI:-0}" = "1" ]; then
     echo "-> Installing Gemini CLI..."
     install_gemini_cli
+else
+    echo "-> Skipping Gemini CLI..."
 fi

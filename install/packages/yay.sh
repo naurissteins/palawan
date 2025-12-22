@@ -12,7 +12,9 @@ install_yay() {
     fi
 }
 
-if ask_yes_no "Install yay?"; then
+if [ "${PALAWAN_INSTALL_YAY:-0}" = "1" ]; then
     echo "-> Installing yay..."
     install_yay
+else
+    echo "-> Skipping yay..."
 fi

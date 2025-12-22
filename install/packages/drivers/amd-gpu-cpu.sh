@@ -7,7 +7,9 @@ install_amd() {
       mesa-utils
 }
 
-if ask_yes_no "Install AMD drivers?"; then
+if [ "${PALAWAN_INSTALL_AMD_DRIVERS:-0}" = "1" ]; then
     echo "-> Installing AMD drivers..."
     install_amd
+else
+    echo "-> Skipping AMD drivers..."
 fi

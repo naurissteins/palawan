@@ -42,7 +42,9 @@ install_hyprland() {
     fi
 }
 
-if ask_yes_no "Install Hyprland and core Wayland dependencies?"; then
+if [ "${PALAWAN_INSTALL_HYPRLAND:-0}" = "1" ]; then
     echo "-> Installing Hyprland and core Wayland dependencies..."
     install_hyprland
+else
+    echo "-> Skipping Hyprland and Wayland dependencies..."
 fi

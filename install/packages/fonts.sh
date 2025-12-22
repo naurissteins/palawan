@@ -8,7 +8,9 @@ install_fonts() {
       noto-fonts
 }
 
-if ask_yes_no "Install Fonts?"; then
+if [ "${PALAWAN_INSTALL_FONTS:-0}" = "1" ]; then
     echo "-> Installing Fonts..."
     install_fonts
+else
+    echo "-> Skipping Fonts..."
 fi
