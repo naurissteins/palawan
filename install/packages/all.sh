@@ -3,6 +3,7 @@
 #run_logged $PALAWAN_INSTALL/packages/base.sh
 #run_logged $PALAWAN_INSTALL/packages/hyprland.sh
 #run_logged $PALAWAN_INSTALL/packages/nodejs.sh
+#run_logged $PALAWAN_INSTALL/packages/terminal.sh
 #run_logged $PALAWAN_INSTALL/packages/ai-cli/codex-cli.sh
 #run_logged $PALAWAN_INSTALL/packages/ai-cli/gemini-cli.sh
 #run_logged $PALAWAN_INSTALL/packages/ai-cli/claude-cli.sh
@@ -10,4 +11,3 @@
 #run_logged $PALAWAN_INSTALL/packages/web-browser.sh
 #run_logged $PALAWAN_INSTALL/packages/editors.sh
 #run_logged $PALAWAN_INSTALL/greeter/sddm/sddm.sh
-run_logged $PALAWAN_INSTALL/packages/terminal.sh
