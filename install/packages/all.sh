@@ -8,4 +8,5 @@
 #run_logged $PALAWAN_INSTALL/packages/ai-cli/claude-cli.sh
 #run_logged $PALAWAN_INSTALL/packages/fonts.sh
 #run_logged $PALAWAN_INSTALL/packages/web-browser.sh
-run_logged $PALAWAN_INSTALL/greeter/sddm/sddm.sh
+run_logged $PALAWAN_INSTALL/packages/editors.sh
+#run_logged $PALAWAN_INSTALL/greeter/sddm/sddm.sh
