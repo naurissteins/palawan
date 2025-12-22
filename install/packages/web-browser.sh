@@ -7,7 +7,10 @@ install_web_browsers() {
     echo "  1) Firefox"
     echo "  2) Chromium"
     echo "  3) Ungoogled Chromium (AUR)"
-    read -p "${PROMPT_COLOR}Enter choices [1 2 3]: ${RESET_COLOR}" choices </dev/tty
+    echo "  4) Brave (AUR)"
+    echo "  5) Zen Browser (AUR)"
+    echo "  6) LibreWolf (AUR)"
+    read -p "${PROMPT_COLOR}Enter choices [1 2 3 4 5 6]: ${RESET_COLOR}" choices </dev/tty
 
     if [ -z "${choices// }" ]; then
         echo "-> Skipping browser install."
@@ -19,6 +22,9 @@ install_web_browsers() {
             1|firefox|f) pacman_packages+=(firefox firefox-ublock-origin);;
             2|chromium|c) pacman_packages+=(chromium);;
             3|ungoogled-chromium-bin|u) yay_packages+=(ungoogled-chromium-bin);;
+            4|brave-bin|b) yay_packages+=(brave-bin);;
+            5|zen-browser-bin|z) yay_packages+=(zen-browser-bin);;
+            6|librewolf-bin|l) yay_packages+=(librewolf-bin);;
             *) echo "Unknown option: $choice";;
         esac
     done
