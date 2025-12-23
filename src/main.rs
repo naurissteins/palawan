@@ -17,6 +17,15 @@ use ratatui::Terminal;
 
 const LOG_CAPACITY: usize = 200;
 const SPINNER: [&str; 4] = ["|", "/", "-", "\\"];
+const PALAWAN_ART: [&str; 7] = [
+    "                 ▄▄▄",
+    "██████╗  █████╗ ██╗      █████╗ ██╗    ██╗ █████╗ ███╗   ██╗",
+    "██╔══██╗██╔══██╗██║     ██╔══██╗██║    ██║██╔══██╗████╗  ██║",
+    "██████╔╝███████║██║     ███████║██║ █╗ ██║███████║██╔██╗ ██║",
+    "██╔═══╝ ██╔══██║██║     ██╔══██║██║███╗██║██╔══██║██║╚██╗██║",
+    "██║     ██║  ██║███████╗██║  ██║╚███╔███╔╝██║  ██║██║ ╚████║",
+    "╚═╝     ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═══╝",
+];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum StepStatus {
@@ -131,6 +140,7 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
+            Constraint::Length(PALAWAN_ART.len() as u16),
             Constraint::Length(1),
             Constraint::Length(3),
             Constraint::Length(app.steps.len() as u16 + 2),
@@ -139,6 +149,20 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
         ])
         .split(area);
 
+    let art_lines: Vec<Line> = PALAWAN_ART
+        .iter()
+        .map(|line| {
+            Line::from(Span::styled(
+                *line,
+                Style::default()
+                    .fg(Color::LightRed)
+                    .add_modifier(Modifier::BOLD),
+            ))
+        })
+        .collect();
+    let art = Paragraph::new(art_lines).block(Block::default());
+    f.render_widget(art, layout[0]);
+
     let title = Line::from(vec![
         Span::styled(
             "Palawan Installer",
@@ -146,13 +170,13 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
         ),
     ]);
     let title_block = Paragraph::new(title).block(Block::default());
-    f.render_widget(title_block, layout[0]);
+    f.render_widget(title_block, layout[1]);
 
     let progress = Gauge::default()
         .block(Block::default().borders(Borders::ALL).title("Progress"))
         .gauge_style(Style::default().fg(Color::Cyan))
         .ratio(app.progress);
-    f.render_widget(progress, layout[1]);
+    f.render_widget(progress, layout[2]);
 
     let step_lines: Vec<Line> = app
         .steps
@@ -162,7 +186,7 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
     let steps = Paragraph::new(step_lines)
         .block(Block::default().borders(Borders::ALL).title("Steps"))
         .wrap(Wrap { trim: false });
-    f.render_widget(steps, layout[2]);
+    f.render_widget(steps, layout[3]);
 
     let log_lines: Vec<Line> = app
         .logs
@@ -172,7 +196,7 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
     let logs = Paragraph::new(log_lines)
         .block(Block::default().borders(Borders::ALL).title("Logs"))
         .wrap(Wrap { trim: false });
-    f.render_widget(logs, layout[3]);
+    f.render_widget(logs, layout[4]);
 
     let status = if app.done {
         if app.err.is_some() {
@@ -191,7 +215,7 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
         Style::default().fg(Color::Gray)
     };
     let status_line = Paragraph::new(Line::from(Span::styled(status, status_style)));
-    f.render_widget(status_line, layout[4]);
+    f.render_widget(status_line, layout[5]);
 }
 
 fn render_step(step: &Step, spinner_idx: usize) -> Line<'static> {
