@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Palawan Theme Setup
-Comment=Apply GNOME dark theme on first login
-Exec=/bin/bash -lc "$HOME/.local/share/palawan/install/post-install/run-gnome-theme.sh"
-Terminal=false
-OnlyShowIn=GNOME;
-X-GNOME-Autostart-enabled=true

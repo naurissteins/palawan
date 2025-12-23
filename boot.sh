@@ -1,34 +1,19 @@
 #!/bin/bash
+set -e
 
-ansi_art='                 ▄▄▄                                                   
-██████╗  █████╗ ██╗      █████╗ ██╗    ██╗ █████╗ ███╗   ██╗
-██╔══██╗██╔══██╗██║     ██╔══██╗██║    ██║██╔══██╗████╗  ██║
-██████╔╝███████║██║     ███████║██║ █╗ ██║███████║██╔██╗ ██║
-██╔═══╝ ██╔══██║██║     ██╔══██║██║███╗██║██╔══██║██║╚██╗██║
-██║     ██║  ██║███████╗██║  ██║╚███╔███╔╝██║  ██║██║ ╚████║
-╚═╝     ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═══╝
-'
+echo "Bootstrapping Palawan..."
 
-clear
-echo -e "\n$ansi_art\n"
+sudo pacman -Sy --noconfirm --needed curl ca-certificates
 
-sudo pacman -Syu --noconfirm --needed git go
+INSTALL_DIR="$HOME/.local/bin"
+BIN_NAME="palawan-installer"
 
-# Use custom repo if specified, otherwise default to balabac/palawan
-PALAWAN_REPO="${PALAWAN_REPO:-balabac/palawan}"
+mkdir -p "$INSTALL_DIR"
 
-echo -e "\nCloning Palawan from: https://github.com/${PALAWAN_REPO}.git"
-rm -rf ~/.local/share/palawan/
-git clone "https://github.com/${PALAWAN_REPO}.git" ~/.local/share/palawan >/dev/null
+curl -L \
+  https://github.com/balabac/palawan/releases/latest/download/$BIN_NAME \
+  -o "$INSTALL_DIR/$BIN_NAME"
 
-# Use custom branch if instructed, otherwise default to master
-PALAWAN_REF="${PALAWAN_REF:-master}"
-if [[ $PALAWAN_REF != "master" ]]; then
-  echo -e "\e[32mUsing branch: $PALAWAN_REF\e[0m"
-  cd ~/.local/share/palawan
-  git fetch origin "${PALAWAN_REF}" && git checkout "${PALAWAN_REF}"
-  cd -
-fi
+chmod +x "$INSTALL_DIR/$BIN_NAME"
 
-echo -e "\nInstallation starting..."
-source ~/.local/share/palawan/install.sh
+exec "$INSTALL_DIR/$BIN_NAME"
