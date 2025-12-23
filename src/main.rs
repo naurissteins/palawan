@@ -17,6 +17,7 @@ use ratatui::Terminal;
 
 const LOG_CAPACITY: usize = 200;
 const SPINNER: [&str; 4] = ["|", "/", "-", "\\"];
+const DEFAULT_PACKAGES: &str = include_str!("../packages/base.txt");
 const PALAWAN_ART: [&str; 7] = [
     "                 ▄▄▄",
     "██████╗  █████╗ ██╗      █████╗ ██╗    ██╗ █████╗ ███╗   ██╗",
@@ -65,7 +66,9 @@ struct ProgressState {
 }
 
 fn main() -> Result<()> {
-    let packages = load_packages("packages/base.txt").context("load package list")?;
+    let packages_path = parse_packages_arg()
+        .or_else(|| std::env::var("PALAWAN_PACKAGES_FILE").ok());
+    let packages = load_packages(packages_path.as_deref()).context("load package list")?;
     let (tx, rx) = crossbeam_channel::unbounded();
 
     let installer_tx = tx.clone();
@@ -402,11 +405,21 @@ fn parse_pacman_install(line: &str) -> Option<String> {
     Some(pkg.trim_end_matches('.').to_string())
 }
 
-fn load_packages(path: &str) -> Result<Vec<String>> {
-    let file = std::fs::File::open(path).with_context(|| format!("open {}", path))?;
-    let reader = io::BufReader::new(file);
+fn load_packages(path: Option<&str>) -> Result<Vec<String>> {
+    match path {
+        Some(path) => {
+            let file = std::fs::File::open(path).with_context(|| format!("open {}", path))?;
+            let reader = io::BufReader::new(file);
+            parse_packages(reader, Some(path))
+        }
+        None => parse_packages(DEFAULT_PACKAGES.as_bytes(), None),
+    }
+}
+
+fn parse_packages<R: io::Read>(reader: R, source: Option<&str>) -> Result<Vec<String>> {
+    let buf = io::BufReader::new(reader);
     let mut packages = Vec::new();
-    for line in reader.lines().flatten() {
+    for line in buf.lines().flatten() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
@@ -414,11 +427,27 @@ fn load_packages(path: &str) -> Result<Vec<String>> {
         packages.push(trimmed.to_string());
     }
     if packages.is_empty() {
-        anyhow::bail!("no packages found in {}", path);
+        let source = source.unwrap_or("embedded package list");
+        anyhow::bail!("no packages found in {}", source);
     }
     Ok(packages)
 }
 
 fn send_event(tx: &crossbeam_channel::Sender<InstallerEvent>, evt: InstallerEvent) {
     let _ = tx.try_send(evt);
+}
+
+fn parse_packages_arg() -> Option<String> {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--packages-file" {
+            return args.next();
+        }
+        if let Some(value) = arg.strip_prefix("--packages-file=") {
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+    }
+    None
 }
