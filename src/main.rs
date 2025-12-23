@@ -1,6 +1,12 @@
 use std::collections::{HashSet, VecDeque};
+use std::fs;
 use std::io::{self, BufRead};
+use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -47,6 +53,7 @@ enum InstallerEvent {
     Progress(f64),
     Step { index: usize, status: StepStatus, err: Option<String> },
     Done(Option<String>),
+    NeedSudo,
 }
 
 struct App {
@@ -63,22 +70,20 @@ struct ProgressState {
     seen: HashSet<String>,
     total: usize,
     installed: usize,
+    weight: f64,
 }
 
 fn main() -> Result<()> {
     let packages_path = parse_packages_arg()
         .or_else(|| std::env::var("PALAWAN_PACKAGES_FILE").ok());
     let packages = load_packages(packages_path.as_deref()).context("load package list")?;
+
     let (tx, rx) = crossbeam_channel::unbounded();
+    let (sudo_tx, sudo_rx) = crossbeam_channel::bounded(1);
 
     let installer_tx = tx.clone();
     thread::spawn(move || {
-        if let Err(err) = run_installer(installer_tx, packages) {
-            let _ = tx.send(InstallerEvent::Step {
-                index: 0,
-                status: StepStatus::Failed,
-                err: Some(err.to_string()),
-            });
+        if let Err(err) = run_installer(installer_tx, sudo_rx, packages) {
             let _ = tx.send(InstallerEvent::Done(Some(err.to_string())));
         }
     });
@@ -96,6 +101,11 @@ fn main() -> Result<()> {
                 err: None,
             },
             Step {
+                name: "Installing yay".to_string(),
+                status: StepStatus::Pending,
+                err: None,
+            },
+            Step {
                 name: "Finalizing".to_string(),
                 status: StepStatus::Pending,
                 err: None,
@@ -109,6 +119,10 @@ fn main() -> Result<()> {
     };
 
     let mut last_tick = Instant::now();
+    let mut sudo_keepalive: Option<Arc<AtomicBool>> = None;
+    if sudo_available() {
+        sudo_keepalive = Some(start_sudo_keepalive());
+    }
     loop {
         terminal.draw(|f| draw_ui(f.size(), f, &app))?;
 
@@ -125,7 +139,21 @@ fn main() -> Result<()> {
         }
 
         while let Ok(evt) = rx.try_recv() {
-            handle_event(&mut app, evt);
+            match evt {
+                InstallerEvent::NeedSudo => {
+                    disable_raw_mode().context("disable raw mode")?;
+                    clear_screen()?;
+                    println!("Sudo password is required to continue.");
+                    ensure_sudo()?;
+                    if sudo_keepalive.is_none() {
+                        sudo_keepalive = Some(start_sudo_keepalive());
+                    }
+                    enable_raw_mode().context("enable raw mode")?;
+                    clear_screen()?;
+                    let _ = sudo_tx.send(());
+                }
+                _ => handle_event(&mut app, evt),
+            }
         }
 
         if last_tick.elapsed() >= Duration::from_millis(120) {
@@ -136,6 +164,9 @@ fn main() -> Result<()> {
 
     disable_raw_mode().context("disable raw mode")?;
     let _ = clear_screen();
+    if let Some(flag) = sudo_keepalive {
+        flag.store(true, Ordering::Relaxed);
+    }
     Ok(())
 }
 
@@ -280,6 +311,7 @@ fn handle_event(app: &mut App, evt: InstallerEvent) {
             app.done = true;
             app.err = err;
         }
+        InstallerEvent::NeedSudo => {}
     }
 }
 
@@ -290,13 +322,16 @@ fn push_log(logs: &mut VecDeque<String>, line: String) {
     logs.push_back(line);
 }
 
-fn run_installer(tx: crossbeam_channel::Sender<InstallerEvent>, packages: Vec<String>) -> Result<()> {
+fn run_installer(
+    tx: crossbeam_channel::Sender<InstallerEvent>,
+    sudo_rx: crossbeam_channel::Receiver<()>,
+    packages: Vec<String>,
+) -> Result<()> {
     send_event(&tx, InstallerEvent::Step { index: 0, status: StepStatus::Running, err: None });
     send_event(&tx, InstallerEvent::Log("Installing base packages...".to_string()));
     send_event(&tx, InstallerEvent::Log(format!("Packages: {}", packages.join(", "))));
 
-    ensure_sudo()?;
-
+    ensure_sudo_ready(&tx, &sudo_rx)?;
     let mut package_set = HashSet::new();
     for pkg in &packages {
         package_set.insert(pkg.to_string());
@@ -306,20 +341,126 @@ fn run_installer(tx: crossbeam_channel::Sender<InstallerEvent>, packages: Vec<St
         seen: HashSet::new(),
         total: packages.len(),
         installed: 0,
+        weight: 1.0 / 3.0,
     }));
 
     let args = build_pacman_args(&packages);
-    run_command(&tx, "sudo", &args, Some(state))?;
+    if let Err(err) = run_command(&tx, "sudo", &args, None, Some(state)) {
+        send_event(
+            &tx,
+            InstallerEvent::Step {
+                index: 0,
+                status: StepStatus::Failed,
+                err: Some(err.to_string()),
+            },
+        );
+        return Err(err);
+    }
 
-    send_event(&tx, InstallerEvent::Step { index: 0, status: StepStatus::Done, err: None });
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: 0,
+            status: StepStatus::Done,
+            err: None,
+        },
+    );
+    send_event(&tx, InstallerEvent::Progress(1.0 / 3.0));
+
     send_event(&tx, InstallerEvent::Step { index: 1, status: StepStatus::Running, err: None });
+    if let Err(err) = install_yay(&tx, &sudo_rx) {
+        send_event(
+            &tx,
+            InstallerEvent::Step {
+                index: 1,
+                status: StepStatus::Failed,
+                err: Some(err.to_string()),
+            },
+        );
+        return Err(err);
+    }
+
+    send_event(&tx, InstallerEvent::Progress(2.0 / 3.0));
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: 1,
+            status: StepStatus::Done,
+            err: None,
+        },
+    );
+    send_event(&tx, InstallerEvent::Step { index: 2, status: StepStatus::Running, err: None });
     send_event(&tx, InstallerEvent::Log("Finalizing...".to_string()));
     thread::sleep(Duration::from_millis(300));
-    send_event(&tx, InstallerEvent::Step { index: 1, status: StepStatus::Done, err: None });
+    send_event(&tx, InstallerEvent::Step { index: 2, status: StepStatus::Done, err: None });
     send_event(&tx, InstallerEvent::Progress(1.0));
     send_event(&tx, InstallerEvent::Done(None));
 
     Ok(())
+}
+
+fn install_yay(
+    tx: &crossbeam_channel::Sender<InstallerEvent>,
+    sudo_rx: &crossbeam_channel::Receiver<()>,
+) -> Result<()> {
+    send_event(&tx, InstallerEvent::Log("Installing yay (AUR helper)...".to_string()));
+
+    if std::env::var("USER").unwrap_or_default() == "root" || nix_euid_is_root() {
+        anyhow::bail!("yay install must run as a non-root user");
+    }
+
+    ensure_sudo_ready(tx, sudo_rx)?;
+    let deps = vec!["git".to_string(), "base-devel".to_string()];
+    let args = build_pacman_args(&deps);
+    run_command(tx, "sudo", &args, None, None)?;
+
+    let yay_installed = Command::new("yay")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+    if yay_installed {
+        send_event(&tx, InstallerEvent::Log("yay is already installed, skipping.".to_string()));
+        return Ok(());
+    }
+
+    send_event(&tx, InstallerEvent::Log("yay not found, installing...".to_string()));
+    let temp_dir = "/tmp/yay-bin";
+    if Path::new(temp_dir).exists() {
+        let _ = fs::remove_dir_all(temp_dir);
+    }
+
+    let clone_args = vec![
+        "clone".to_string(),
+        "https://aur.archlinux.org/yay-bin.git".to_string(),
+        temp_dir.to_string(),
+    ];
+    run_command(tx, "git", &clone_args, None, None)?;
+
+    ensure_sudo_ready(tx, sudo_rx)?;
+    let makepkg_args = vec![
+        "-si".to_string(),
+        "--noconfirm".to_string(),
+        "--needed".to_string(),
+        "--syncdeps".to_string(),
+    ];
+    run_command(tx, "makepkg", &makepkg_args, Some(temp_dir), None)?;
+
+    let _ = fs::remove_dir_all(temp_dir);
+    Ok(())
+}
+
+fn nix_euid_is_root() -> bool {
+    #[cfg(target_family = "unix")]
+    {
+        unsafe { libc::geteuid() == 0 }
+    }
+    #[cfg(not(target_family = "unix"))]
+    {
+        false
+    }
 }
 
 fn ensure_sudo() -> Result<()> {
@@ -332,6 +473,49 @@ fn ensure_sudo() -> Result<()> {
     } else {
         Err(anyhow::anyhow!("sudo authentication failed"))
     }
+}
+
+fn ensure_sudo_ready(
+    tx: &crossbeam_channel::Sender<InstallerEvent>,
+    sudo_rx: &crossbeam_channel::Receiver<()>,
+) -> Result<()> {
+    if sudo_available() {
+        return Ok(());
+    }
+    send_event(tx, InstallerEvent::NeedSudo);
+    sudo_rx.recv().context("waiting for sudo")?;
+    if sudo_available() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("sudo authentication failed"))
+    }
+}
+
+fn sudo_available() -> bool {
+    Command::new("sudo")
+        .arg("-n")
+        .arg("true")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+fn start_sudo_keepalive() -> Arc<AtomicBool> {
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_flag = Arc::clone(&stop);
+    thread::spawn(move || {
+        while !stop_flag.load(Ordering::Relaxed) {
+            thread::sleep(Duration::from_secs(60));
+            let _ = Command::new("sudo")
+                .arg("-v")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+    });
+    stop
 }
 
 fn build_pacman_args(packages: &[String]) -> Vec<String> {
@@ -350,10 +534,12 @@ fn run_command(
     tx: &crossbeam_channel::Sender<InstallerEvent>,
     command: &str,
     args: &[String],
+    cwd: Option<&str>,
     state: Option<std::sync::Arc<std::sync::Mutex<ProgressState>>>,
 ) -> Result<()> {
     let mut child = Command::new(command)
         .args(args)
+        .current_dir(cwd.unwrap_or("."))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -396,7 +582,7 @@ fn read_stream<R: io::Read>(
                 let mut guard = shared.lock().unwrap();
                 if guard.package_set.contains(&pkg) && guard.seen.insert(pkg) {
                     guard.installed += 1;
-                    let progress = guard.installed as f64 / guard.total as f64;
+                    let progress = (guard.installed as f64 / guard.total as f64) * guard.weight;
                     send_event(tx, InstallerEvent::Progress(progress));
                 }
             }
