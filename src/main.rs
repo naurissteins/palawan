@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, ClearType};
+use crossterm::{execute, terminal::Clear};
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -73,6 +74,7 @@ fn main() -> Result<()> {
     enable_raw_mode().context("enable raw mode")?;
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))
         .context("init terminal")?;
+    execute!(io::stdout(), Clear(ClearType::All))?;
 
     let mut app = App {
         steps: vec![
@@ -200,7 +202,10 @@ fn render_step(step: &Step, spinner_idx: usize) -> Line<'static> {
         StepStatus::Failed => "[x]",
     };
 
-    let mut spans = vec![Span::raw(format!("{} {}", icon, step.name))];
+    let mut spans = vec![Span::styled(
+        format!("{} {}", icon, step.name),
+        style_for_status(step.status),
+    )];
     if step.status == StepStatus::Running {
         spans.push(Span::raw(format!(" {}", SPINNER[spinner_idx])));
     }
@@ -212,6 +217,15 @@ fn render_step(step: &Step, spinner_idx: usize) -> Line<'static> {
     }
 
     Line::from(spans)
+}
+
+fn style_for_status(status: StepStatus) -> Style {
+    match status {
+        StepStatus::Pending => Style::default().fg(Color::Gray),
+        StepStatus::Running => Style::default().fg(Color::Yellow),
+        StepStatus::Done => Style::default().fg(Color::LightGreen),
+        StepStatus::Failed => Style::default().fg(Color::LightRed),
+    }
 }
 
 fn handle_event(app: &mut App, evt: InstallerEvent) {
