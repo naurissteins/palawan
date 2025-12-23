@@ -84,9 +84,9 @@ fn main() -> Result<()> {
     });
 
     enable_raw_mode().context("enable raw mode")?;
+    clear_screen()?;
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))
         .context("init terminal")?;
-    execute!(io::stdout(), Clear(ClearType::All))?;
 
     let mut app = App {
         steps: vec![
