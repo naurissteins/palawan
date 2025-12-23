@@ -7,18 +7,19 @@ Requirements
 - Arch Linux
 - `sudo` configured for your user
 - Network access to GitHub for the release binary download
+- Rust toolchain (for local builds)
 
 Local build
 ```
-go mod download
-go build -o palawan-installer .
+cargo build --release
 ```
 
 Run locally
 ```
-./palawan-installer
+./target/release/palawan-installer
 ```
 
 Release notes
 - Binary name must be `palawan-installer` to match `boot.sh`.
 - The installer uses `sudo pacman` to install base packages.
+- Base packages live in `packages/base.txt`.
