@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, ClearType};
-use crossterm::{execute, terminal::Clear};
+use crossterm::{cursor, execute, terminal::Clear};
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -135,6 +135,17 @@ fn main() -> Result<()> {
     }
 
     disable_raw_mode().context("disable raw mode")?;
+    let _ = clear_screen();
+    Ok(())
+}
+
+fn clear_screen() -> Result<()> {
+    execute!(
+        io::stdout(),
+        Clear(ClearType::All),
+        cursor::MoveTo(0, 0)
+    )
+    .context("clear screen")?;
     Ok(())
 }
 
