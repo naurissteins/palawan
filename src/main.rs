@@ -388,31 +388,94 @@ fn draw_browser_selector(
     .wrap(Wrap { trim: false });
     f.render_widget(help, layout[2]);
 
+    let main_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+        .split(layout[3]);
+
+    let selected_count = selected.iter().filter(|flag| **flag).count();
+    let list_title = format!("Browsers ({} selected)", selected_count);
     let items: Vec<ListItem> = BROWSER_CHOICES
         .iter()
         .enumerate()
         .map(|(idx, choice)| {
-            let marker = if selected.get(idx).copied().unwrap_or(false) {
-                "[x]"
+            let is_selected = selected.get(idx).copied().unwrap_or(false);
+            let marker_span = if is_selected {
+                Span::styled("[x]", Style::default().fg(Color::LightGreen))
             } else {
-                "[ ]"
+                Span::raw("[ ]")
             };
-            ListItem::new(Line::from(format!(
-                "{:>2}) {} {}",
+            let mut spans = vec![Span::raw(format!(
+                "{:>2}) ",
                 idx + 1,
-                marker,
-                choice.label
-            )))
+            ))];
+            spans.push(marker_span);
+            spans.push(Span::raw(" "));
+            spans.push(Span::raw(choice.label));
+            spans.push(Span::raw(" "));
+            let has_pacman = !choice.pacman.is_empty();
+            let has_yay = !choice.yay.is_empty();
+            spans.push(Span::raw("("));
+            if has_pacman {
+                spans.push(Span::styled("pacman", Style::default().fg(Color::Cyan)));
+            }
+            if has_pacman && has_yay {
+                spans.push(Span::raw(" + "));
+            }
+            if has_yay {
+                spans.push(Span::styled("AUR", Style::default().fg(Color::Yellow)));
+            }
+            spans.push(Span::raw(")"));
+            ListItem::new(Line::from(spans))
         })
         .collect();
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Browsers"))
+        .block(Block::default().borders(Borders::ALL).title(list_title))
         .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
     let mut state = ListState::default();
     if !BROWSER_CHOICES.is_empty() {
         state.select(Some(cursor.min(BROWSER_CHOICES.len() - 1)));
     }
-    f.render_stateful_widget(list, layout[3], &mut state);
+    f.render_stateful_widget(list, main_layout[0], &mut state);
+
+    let selected_items: Vec<ListItem> = BROWSER_CHOICES
+        .iter()
+        .zip(selected.iter())
+        .filter_map(|(choice, flag)| {
+            if *flag {
+                let mut spans = vec![
+                    Span::styled("[x]", Style::default().fg(Color::LightGreen)),
+                    Span::raw(" "),
+                    Span::raw(choice.label),
+                    Span::raw(" "),
+                ];
+                let has_pacman = !choice.pacman.is_empty();
+                let has_yay = !choice.yay.is_empty();
+                spans.push(Span::raw("("));
+                if has_pacman {
+                    spans.push(Span::styled("pacman", Style::default().fg(Color::Cyan)));
+                }
+                if has_pacman && has_yay {
+                    spans.push(Span::raw(" + "));
+                }
+                if has_yay {
+                    spans.push(Span::styled("AUR", Style::default().fg(Color::Yellow)));
+                }
+                spans.push(Span::raw(")"));
+                Some(ListItem::new(Line::from(spans)))
+            } else {
+                None
+            }
+        })
+        .collect();
+    let selected_block = if selected_items.is_empty() {
+        List::new(vec![ListItem::new(Line::from("None selected"))])
+            .block(Block::default().borders(Borders::ALL).title("Selection"))
+    } else {
+        List::new(selected_items)
+            .block(Block::default().borders(Borders::ALL).title("Selection"))
+    };
+    f.render_widget(selected_block, main_layout[1]);
 
     let footer = Paragraph::new(Line::from(Span::styled(
         "Selections apply to this run only.",
