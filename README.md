@@ -26,3 +26,17 @@ Release notes
   - The list is embedded into the binary at build time.
   - Override at runtime with `PALAWAN_PACKAGES_FILE=/path/to/list.txt`.
   - Or pass `--packages-file /path/to/list.txt`.
+
+Code layout
+- `src/main.rs` wires modules together and runs the main TUI loop.
+- `src/installer.rs` handles install steps, sudo, and command execution.
+- `src/ui.rs` renders the installer UI and browser selection screen.
+- `src/selection.rs` defines selectable browser choices and selection logic.
+- `src/model.rs` contains shared app state and event types.
+- `src/packages.rs` loads package lists and parses CLI args.
+
+Adding a new chooser step
+- Add choices and selection logic in `src/selection.rs` (similar to `BROWSER_CHOICES`).
+- Add a TUI selector in `src/ui.rs` and return a `PackageSelection`.
+- Extend `STEP_NAMES` and install logic in `src/installer.rs`.
+- Wire the new selection into `src/main.rs` before starting the installer thread.
