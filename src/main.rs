@@ -196,6 +196,9 @@ fn main() -> Result<()> {
         err: None,
     };
 
+    terminal.clear().context("clear terminal")?;
+    terminal.draw(|f| draw_ui(f.size(), f, &app))?;
+
     let mut last_tick = Instant::now();
     let mut sudo_keepalive: Option<Arc<AtomicBool>> = None;
     if sudo_available() {
