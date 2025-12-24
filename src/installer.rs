@@ -126,6 +126,7 @@ pub fn run_installer(
             err: None,
         },
     );
+    let browsers_skipped = browser_selection.is_empty();
     if let Err(err) = install_browsers(&tx, &sudo_rx, &browser_selection) {
         send_event(
             &tx,
@@ -142,7 +143,11 @@ pub fn run_installer(
         &tx,
         InstallerEvent::Step {
             index: STEP_BROWSERS,
-            status: StepStatus::Done,
+            status: if browsers_skipped {
+                StepStatus::Skipped
+            } else {
+                StepStatus::Done
+            },
             err: None,
         },
     );

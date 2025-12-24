@@ -260,6 +260,7 @@ fn render_step(step: &Step, spinner_idx: usize) -> Line<'static> {
         StepStatus::Pending => "[ ]",
         StepStatus::Running => "[..]",
         StepStatus::Done => "[OK]",
+        StepStatus::Skipped => "[SKIP]",
         StepStatus::Failed => "[x]",
     };
 
@@ -285,6 +286,7 @@ fn style_for_status(status: StepStatus) -> Style {
         StepStatus::Pending => Style::default().fg(Color::Gray),
         StepStatus::Running => Style::default().fg(Color::Yellow),
         StepStatus::Done => Style::default().fg(Color::LightGreen),
+        StepStatus::Skipped => Style::default().fg(Color::LightYellow),
         StepStatus::Failed => Style::default().fg(Color::LightRed),
     }
 }
