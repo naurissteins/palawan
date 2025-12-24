@@ -152,6 +152,7 @@ fn draw_browser_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected:
             Span::raw(" to continue."),
         ]),
         Line::from("Press s to skip browser installs, q to quit."),
+        Line::from("Tip: press Enter with none selected to skip."),
     ])
     .block(Block::default().borders(Borders::ALL).title("Controls"))
     .wrap(Wrap { trim: false });
@@ -163,7 +164,11 @@ fn draw_browser_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected:
         .split(layout[4]);
 
     let selected_count = selected.iter().filter(|flag| **flag).count();
-    let list_title = format!("Browsers ({} selected)", selected_count);
+    let list_title = if selected_count == 0 {
+        "Browsers (0 selected - Enter skips)".to_string()
+    } else {
+        format!("Browsers ({} selected)", selected_count)
+    };
     let items: Vec<ListItem> = BROWSER_CHOICES
         .iter()
         .enumerate()
