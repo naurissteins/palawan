@@ -114,6 +114,7 @@ fn draw_browser_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected:
         .constraints([
             Constraint::Length(PALAWAN_ART.len() as u16),
             Constraint::Length(1),
+            Constraint::Length(1),
             Constraint::Length(3),
             Constraint::Min(6),
             Constraint::Length(1),
@@ -142,17 +143,24 @@ fn draw_browser_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected:
     f.render_widget(title_block, layout[1]);
 
     let help = Paragraph::new(vec![
-        Line::from("Up/Down to move, Space to toggle, Enter to continue."),
+        Line::from(vec![
+            Span::styled("Up/Down", Style::default().fg(Color::Yellow)),
+            Span::raw(" to move, "),
+            Span::styled("Space", Style::default().fg(Color::Yellow)),
+            Span::raw(" to toggle, "),
+            Span::styled("Enter", Style::default().fg(Color::Yellow)),
+            Span::raw(" to continue."),
+        ]),
         Line::from("Press s to skip browser installs, q to quit."),
     ])
     .block(Block::default().borders(Borders::ALL).title("Controls"))
     .wrap(Wrap { trim: false });
-    f.render_widget(help, layout[2]);
+    f.render_widget(help, layout[3]);
 
     let main_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
-        .split(layout[3]);
+        .split(layout[4]);
 
     let selected_count = selected.iter().filter(|flag| **flag).count();
     let list_title = format!("Browsers ({} selected)", selected_count);
@@ -239,7 +247,7 @@ fn draw_browser_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected:
         "Selections apply to this run only.",
         Style::default().fg(Color::Gray),
     )));
-    f.render_widget(footer, layout[4]);
+    f.render_widget(footer, layout[5]);
 }
 
 fn render_step(step: &Step, spinner_idx: usize) -> Line<'static> {
