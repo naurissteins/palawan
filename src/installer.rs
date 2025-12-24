@@ -12,17 +12,19 @@ use anyhow::{Context, Result};
 use crate::model::{InstallerEvent, StepStatus};
 use crate::selection::PackageSelection;
 
-pub const STEP_NAMES: [&str; 4] = [
+pub const STEP_NAMES: [&str; 5] = [
     "Installing base packages",
     "Installing yay",
     "Installing web browsers",
+    "Installing terminals",
     "Finalizing",
 ];
 
 const STEP_BASE: usize = 0;
 const STEP_YAY: usize = 1;
 const STEP_BROWSERS: usize = 2;
-const STEP_FINAL: usize = 3;
+const STEP_TERMINALS: usize = 3;
+const STEP_FINAL: usize = 4;
 const STEP_COUNT: f64 = STEP_NAMES.len() as f64;
 
 struct ProgressState {
@@ -39,6 +41,7 @@ pub fn run_installer(
     sudo_rx: crossbeam_channel::Receiver<()>,
     packages: Vec<String>,
     browser_selection: PackageSelection,
+    terminal_selection: PackageSelection,
 ) -> Result<()> {
     send_event(
         &tx,
@@ -144,6 +147,40 @@ pub fn run_installer(
         InstallerEvent::Step {
             index: STEP_BROWSERS,
             status: if browsers_skipped {
+                StepStatus::Skipped
+            } else {
+                StepStatus::Done
+            },
+            err: None,
+        },
+    );
+
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_TERMINALS,
+            status: StepStatus::Running,
+            err: None,
+        },
+    );
+    let terminals_skipped = terminal_selection.is_empty();
+    if let Err(err) = install_terminals(&tx, &sudo_rx, &terminal_selection) {
+        send_event(
+            &tx,
+            InstallerEvent::Step {
+                index: STEP_TERMINALS,
+                status: StepStatus::Failed,
+                err: Some(err.to_string()),
+            },
+        );
+        return Err(err);
+    }
+    send_event(&tx, InstallerEvent::Progress(4.0 / STEP_COUNT));
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_TERMINALS,
+            status: if terminals_skipped {
                 StepStatus::Skipped
             } else {
                 StepStatus::Done
@@ -265,6 +302,37 @@ fn install_browsers(
     if !selection.yay.is_empty() {
         let args = build_yay_args(&selection.yay);
         run_command(tx, "yay", &args, None, Some(state))?;
+    }
+
+    Ok(())
+}
+
+fn install_terminals(
+    tx: &crossbeam_channel::Sender<InstallerEvent>,
+    sudo_rx: &crossbeam_channel::Receiver<()>,
+    selection: &PackageSelection,
+) -> Result<()> {
+    if selection.is_empty() {
+        send_event(&tx, InstallerEvent::Log("Skipping terminal install.".to_string()));
+        return Ok(());
+    }
+
+    send_event(&tx, InstallerEvent::Log("Installing terminals...".to_string()));
+    ensure_sudo_ready(tx, sudo_rx)?;
+
+    let total = selection.pacman.len();
+    let state = Arc::new(Mutex::new(ProgressState {
+        package_set: selection.pacman.iter().cloned().collect(),
+        seen: HashSet::new(),
+        total,
+        installed: 0,
+        weight: 1.0 / STEP_COUNT,
+        offset: 3.0 / STEP_COUNT,
+    }));
+
+    if !selection.pacman.is_empty() {
+        let args = build_pacman_args(&selection.pacman);
+        run_command(tx, "sudo", &args, None, Some(state))?;
     }
 
     Ok(())

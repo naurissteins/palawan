@@ -24,7 +24,13 @@ use ratatui::Terminal;
 use crate::installer::{ensure_sudo, run_installer, start_sudo_keepalive, sudo_available, STEP_NAMES};
 use crate::model::{App, InstallerEvent, Step, StepStatus};
 use crate::packages::{load_packages, parse_packages_arg};
-use crate::ui::{draw_ui, run_browser_selector, run_nvidia_selector, SPINNER_LEN};
+use crate::ui::{
+    draw_ui,
+    run_browser_selector,
+    run_nvidia_selector,
+    run_terminal_selector,
+    SPINNER_LEN,
+};
 use crate::drivers::{
     detect_gpu_vendors, detect_installed_nvidia_variant, driver_packages, format_gpu_summary,
     nvidia_driver_installed, GpuVendor,
@@ -73,13 +79,27 @@ fn main() -> Result<()> {
             return Ok(());
         }
     };
+    let terminal_selection = match run_terminal_selector(&mut terminal)? {
+        Some(selection) => selection,
+        None => {
+            disable_raw_mode().context("disable raw mode")?;
+            let _ = clear_screen();
+            return Ok(());
+        }
+    };
 
     let (tx, rx) = crossbeam_channel::unbounded();
     let (sudo_tx, sudo_rx) = crossbeam_channel::bounded(1);
 
     let installer_tx = tx.clone();
     thread::spawn(move || {
-        if let Err(err) = run_installer(installer_tx, sudo_rx, packages, browser_selection) {
+        if let Err(err) = run_installer(
+            installer_tx,
+            sudo_rx,
+            packages,
+            browser_selection,
+            terminal_selection,
+        ) {
             let _ = tx.send(InstallerEvent::Done(Some(err.to_string())));
         }
     });

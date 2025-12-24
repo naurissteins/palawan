@@ -22,6 +22,9 @@ const UNGOOGLED_YAY: [&str; 1] = ["ungoogled-chromium-bin"];
 const BRAVE_YAY: [&str; 1] = ["brave-bin"];
 const ZEN_YAY: [&str; 1] = ["zen-browser-bin"];
 const LIBREWOLF_YAY: [&str; 1] = ["librewolf-bin"];
+const GHOSTTY_PACMAN: [&str; 1] = ["ghostty"];
+const KITTY_PACMAN: [&str; 1] = ["kitty"];
+const ALACRITTY_PACMAN: [&str; 1] = ["alacritty"];
 
 pub const BROWSER_CHOICES: [InstallChoice; 6] = [
     InstallChoice {
@@ -56,9 +59,34 @@ pub const BROWSER_CHOICES: [InstallChoice; 6] = [
     },
 ];
 
+pub const TERMINAL_CHOICES: [InstallChoice; 3] = [
+    InstallChoice {
+        label: "Ghostty",
+        pacman: &GHOSTTY_PACMAN,
+        yay: &[],
+    },
+    InstallChoice {
+        label: "Kitty",
+        pacman: &KITTY_PACMAN,
+        yay: &[],
+    },
+    InstallChoice {
+        label: "Alacritty",
+        pacman: &ALACRITTY_PACMAN,
+        yay: &[],
+    },
+];
+
 pub fn selection_from_flags(flags: &[bool]) -> PackageSelection {
+    selection_from_flags_for(flags, &BROWSER_CHOICES)
+}
+
+pub fn selection_from_flags_for(
+    flags: &[bool],
+    choices: &[InstallChoice],
+) -> PackageSelection {
     let mut selection = PackageSelection::default();
-    for (flag, choice) in flags.iter().copied().zip(BROWSER_CHOICES.iter()) {
+    for (flag, choice) in flags.iter().copied().zip(choices.iter()) {
         if flag {
             extend_unique(&mut selection.pacman, choice.pacman);
             extend_unique(&mut selection.yay, choice.yay);
