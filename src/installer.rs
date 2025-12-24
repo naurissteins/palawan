@@ -12,8 +12,9 @@ use anyhow::{Context, Result};
 use crate::model::{InstallerEvent, StepStatus};
 use crate::selection::{NpmSelection, PackageSelection};
 
-pub const STEP_NAMES: [&str; 8] = [
+pub const STEP_NAMES: [&str; 9] = [
     "Installing base packages",
+    "Installing Hyprland",
     "Installing yay",
     "Installing web browsers",
     "Installing terminals",
@@ -24,13 +25,14 @@ pub const STEP_NAMES: [&str; 8] = [
 ];
 
 const STEP_BASE: usize = 0;
-const STEP_YAY: usize = 1;
-const STEP_BROWSERS: usize = 2;
-const STEP_TERMINALS: usize = 3;
-const STEP_EDITORS: usize = 4;
-const STEP_NVM: usize = 5;
-const STEP_CODING_AGENTS: usize = 6;
-const STEP_FINAL: usize = 7;
+const STEP_HYPRLAND: usize = 1;
+const STEP_YAY: usize = 2;
+const STEP_BROWSERS: usize = 3;
+const STEP_TERMINALS: usize = 4;
+const STEP_EDITORS: usize = 5;
+const STEP_NVM: usize = 6;
+const STEP_CODING_AGENTS: usize = 7;
+const STEP_FINAL: usize = 8;
 const STEP_COUNT: f64 = STEP_NAMES.len() as f64;
 
 struct ProgressState {
@@ -46,6 +48,7 @@ pub fn run_installer(
     tx: crossbeam_channel::Sender<InstallerEvent>,
     sudo_rx: crossbeam_channel::Receiver<()>,
     packages: Vec<String>,
+    hyprland_packages: Vec<String>,
     browser_selection: PackageSelection,
     terminal_selection: PackageSelection,
     editor_selection: PackageSelection,
@@ -103,6 +106,62 @@ pub fn run_installer(
     send_event(
         &tx,
         InstallerEvent::Step {
+            index: STEP_HYPRLAND,
+            status: StepStatus::Running,
+            err: None,
+        },
+    );
+    let hyprland_skipped = hyprland_packages.is_empty();
+    if !hyprland_skipped {
+        send_event(&tx, InstallerEvent::Log("Installing Hyprland...".to_string()));
+        send_event(
+            &tx,
+            InstallerEvent::Log(format!(
+                "Packages: {}",
+                hyprland_packages.join(", ")
+            )),
+        );
+        ensure_sudo_ready(&tx, &sudo_rx)?;
+        let hyprland_state = Arc::new(Mutex::new(ProgressState {
+            package_set: hyprland_packages.iter().cloned().collect(),
+            seen: HashSet::new(),
+            total: hyprland_packages.len(),
+            installed: 0,
+            weight: 1.0 / STEP_COUNT,
+            offset: 1.0 / STEP_COUNT,
+        }));
+        let args = build_pacman_args(&hyprland_packages);
+        if let Err(err) = run_command(&tx, "sudo", &args, None, Some(hyprland_state)) {
+            send_event(
+                &tx,
+                InstallerEvent::Step {
+                    index: STEP_HYPRLAND,
+                    status: StepStatus::Failed,
+                    err: Some(err.to_string()),
+                },
+            );
+            return Err(err);
+        }
+    } else {
+        send_event(&tx, InstallerEvent::Log("Skipping Hyprland install.".to_string()));
+    }
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_HYPRLAND,
+            status: if hyprland_skipped {
+                StepStatus::Skipped
+            } else {
+                StepStatus::Done
+            },
+            err: None,
+        },
+    );
+    send_event(&tx, InstallerEvent::Progress(2.0 / STEP_COUNT));
+
+    send_event(
+        &tx,
+        InstallerEvent::Step {
             index: STEP_YAY,
             status: StepStatus::Running,
             err: None,
@@ -120,7 +179,7 @@ pub fn run_installer(
         return Err(err);
     }
 
-    send_event(&tx, InstallerEvent::Progress(2.0 / STEP_COUNT));
+    send_event(&tx, InstallerEvent::Progress(3.0 / STEP_COUNT));
     send_event(
         &tx,
         InstallerEvent::Step {
@@ -150,7 +209,7 @@ pub fn run_installer(
         );
         return Err(err);
     }
-    send_event(&tx, InstallerEvent::Progress(3.0 / STEP_COUNT));
+    send_event(&tx, InstallerEvent::Progress(4.0 / STEP_COUNT));
     send_event(
         &tx,
         InstallerEvent::Step {
@@ -184,7 +243,7 @@ pub fn run_installer(
         );
         return Err(err);
     }
-    send_event(&tx, InstallerEvent::Progress(4.0 / STEP_COUNT));
+    send_event(&tx, InstallerEvent::Progress(5.0 / STEP_COUNT));
     send_event(
         &tx,
         InstallerEvent::Step {
@@ -218,7 +277,7 @@ pub fn run_installer(
         );
         return Err(err);
     }
-    send_event(&tx, InstallerEvent::Progress(5.0 / STEP_COUNT));
+    send_event(&tx, InstallerEvent::Progress(6.0 / STEP_COUNT));
     send_event(
         &tx,
         InstallerEvent::Step {
@@ -251,7 +310,7 @@ pub fn run_installer(
         );
         return Err(err);
     }
-    send_event(&tx, InstallerEvent::Progress(6.0 / STEP_COUNT));
+    send_event(&tx, InstallerEvent::Progress(7.0 / STEP_COUNT));
     send_event(
         &tx,
         InstallerEvent::Step {
@@ -285,7 +344,7 @@ pub fn run_installer(
         );
         return Err(err);
     }
-    send_event(&tx, InstallerEvent::Progress(7.0 / STEP_COUNT));
+    send_event(&tx, InstallerEvent::Progress(8.0 / STEP_COUNT));
     send_event(
         &tx,
         InstallerEvent::Step {
@@ -401,7 +460,7 @@ fn install_browsers(
         total,
         installed: 0,
         weight: 1.0 / STEP_COUNT,
-        offset: 2.0 / STEP_COUNT,
+        offset: 3.0 / STEP_COUNT,
     }));
 
     if !selection.pacman.is_empty() {
@@ -437,7 +496,7 @@ fn install_terminals(
         total,
         installed: 0,
         weight: 1.0 / STEP_COUNT,
-        offset: 3.0 / STEP_COUNT,
+        offset: 4.0 / STEP_COUNT,
     }));
 
     if !selection.pacman.is_empty() {
@@ -473,7 +532,7 @@ fn install_editors(
         total,
         installed: 0,
         weight: 1.0 / STEP_COUNT,
-        offset: 4.0 / STEP_COUNT,
+        offset: 5.0 / STEP_COUNT,
     }));
 
     if !selection.pacman.is_empty() {

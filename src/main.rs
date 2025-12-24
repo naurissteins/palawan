@@ -23,7 +23,7 @@ use ratatui::Terminal;
 
 use crate::installer::{ensure_sudo, run_installer, start_sudo_keepalive, sudo_available, STEP_NAMES};
 use crate::model::{App, InstallerEvent, Step, StepStatus};
-use crate::packages::{load_packages, parse_packages_arg};
+use crate::packages::{load_base_packages, load_hyprland_packages, parse_packages_arg};
 use crate::ui::{
     draw_ui,
     run_browser_selector,
@@ -44,7 +44,10 @@ const LOG_CAPACITY: usize = 200;
 fn main() -> Result<()> {
     let packages_path = parse_packages_arg()
         .or_else(|| std::env::var("PALAWAN_PACKAGES_FILE").ok());
-    let mut packages = load_packages(packages_path.as_deref()).context("load package list")?;
+    let mut packages =
+        load_base_packages(packages_path.as_deref()).context("load base package list")?;
+    let hyprland_packages =
+        load_hyprland_packages().context("load hyprland package list")?;
 
     enable_raw_mode().context("enable raw mode")?;
     clear_screen()?;
@@ -124,6 +127,7 @@ fn main() -> Result<()> {
             installer_tx,
             sudo_rx,
             packages,
+            hyprland_packages,
             browser_selection,
             terminal_selection,
             editor_selection,

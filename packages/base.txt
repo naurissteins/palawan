@@ -1,4 +1,4 @@
-# Base packages installed on a fresh system
+# Base packages
 mesa
 htop
 nautilus

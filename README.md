@@ -23,6 +23,7 @@ Release notes
 - Binary name must be `palawan-installer` to match `boot.sh`.
 - The installer uses `sudo pacman` to install base packages.
 - Base packages live in `packages/base.txt`.
+  - Hyprland packages live in `packages/hyprland.txt` and install in a dedicated step.
   - The list is embedded into the binary at build time.
   - Override at runtime with `PALAWAN_PACKAGES_FILE=/path/to/list.txt`.
   - Or pass `--packages-file /path/to/list.txt`.

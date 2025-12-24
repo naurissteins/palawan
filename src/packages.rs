@@ -3,8 +3,9 @@ use std::io::{self, BufRead};
 use anyhow::{Context, Result};
 
 const DEFAULT_PACKAGES: &str = include_str!("../packages/base.txt");
+const HYPRLAND_PACKAGES: &str = include_str!("../packages/hyprland.txt");
 
-pub fn load_packages(path: Option<&str>) -> Result<Vec<String>> {
+pub fn load_base_packages(path: Option<&str>) -> Result<Vec<String>> {
     match path {
         Some(path) => {
             let file = std::fs::File::open(path).with_context(|| format!("open {}", path))?;
@@ -13,6 +14,10 @@ pub fn load_packages(path: Option<&str>) -> Result<Vec<String>> {
         }
         None => parse_packages(DEFAULT_PACKAGES.as_bytes(), None),
     }
+}
+
+pub fn load_hyprland_packages() -> Result<Vec<String>> {
+    parse_packages(HYPRLAND_PACKAGES.as_bytes(), Some("hyprland.txt"))
 }
 
 pub fn parse_packages_arg() -> Option<String> {
