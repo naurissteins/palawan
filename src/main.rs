@@ -18,12 +18,23 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Terminal;
 
 const LOG_CAPACITY: usize = 200;
 const SPINNER: [&str; 4] = ["|", "/", "-", "\\"];
 const DEFAULT_PACKAGES: &str = include_str!("../packages/base.txt");
+const STEP_BASE: usize = 0;
+const STEP_YAY: usize = 1;
+const STEP_BROWSERS: usize = 2;
+const STEP_FINAL: usize = 3;
+const STEP_COUNT: f64 = 4.0;
+const FIREFOX_PACMAN: [&str; 2] = ["firefox", "firefox-ublock-origin"];
+const CHROMIUM_PACMAN: [&str; 1] = ["chromium"];
+const UNGOOGLED_YAY: [&str; 1] = ["ungoogled-chromium-bin"];
+const BRAVE_YAY: [&str; 1] = ["brave-bin"];
+const ZEN_YAY: [&str; 1] = ["zen-browser-bin"];
+const LIBREWOLF_YAY: [&str; 1] = ["librewolf-bin"];
 const PALAWAN_ART: [&str; 7] = [
     "                 ▄▄▄",
     "██████╗  █████╗ ██╗      █████╗ ██╗    ██╗ █████╗ ███╗   ██╗",
@@ -71,28 +82,90 @@ struct ProgressState {
     total: usize,
     installed: usize,
     weight: f64,
+    offset: f64,
 }
+
+#[derive(Default, Clone)]
+struct PackageSelection {
+    pacman: Vec<String>,
+    yay: Vec<String>,
+}
+
+impl PackageSelection {
+    fn is_empty(&self) -> bool {
+        self.pacman.is_empty() && self.yay.is_empty()
+    }
+}
+
+struct InstallChoice {
+    label: &'static str,
+    pacman: &'static [&'static str],
+    yay: &'static [&'static str],
+}
+
+const BROWSER_CHOICES: [InstallChoice; 6] = [
+    InstallChoice {
+        label: "Firefox",
+        pacman: &FIREFOX_PACMAN,
+        yay: &[],
+    },
+    InstallChoice {
+        label: "Chromium",
+        pacman: &CHROMIUM_PACMAN,
+        yay: &[],
+    },
+    InstallChoice {
+        label: "Ungoogled Chromium (AUR)",
+        pacman: &[],
+        yay: &UNGOOGLED_YAY,
+    },
+    InstallChoice {
+        label: "Brave (AUR)",
+        pacman: &[],
+        yay: &BRAVE_YAY,
+    },
+    InstallChoice {
+        label: "Zen Browser (AUR)",
+        pacman: &[],
+        yay: &ZEN_YAY,
+    },
+    InstallChoice {
+        label: "LibreWolf (AUR)",
+        pacman: &[],
+        yay: &LIBREWOLF_YAY,
+    },
+];
 
 fn main() -> Result<()> {
     let packages_path = parse_packages_arg()
         .or_else(|| std::env::var("PALAWAN_PACKAGES_FILE").ok());
     let packages = load_packages(packages_path.as_deref()).context("load package list")?;
 
-    let (tx, rx) = crossbeam_channel::unbounded();
-    let (sudo_tx, sudo_rx) = crossbeam_channel::bounded(1);
-
-    let installer_tx = tx.clone();
-    thread::spawn(move || {
-        if let Err(err) = run_installer(installer_tx, sudo_rx, packages) {
-            let _ = tx.send(InstallerEvent::Done(Some(err.to_string())));
-        }
-    });
-
     enable_raw_mode().context("enable raw mode")?;
     clear_screen()?;
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))
         .context("init terminal")?;
 
+    let browser_selection = match run_browser_selector(&mut terminal)? {
+        Some(selection) => selection,
+        None => {
+            disable_raw_mode().context("disable raw mode")?;
+            let _ = clear_screen();
+            return Ok(());
+        }
+    };
+
+    let (tx, rx) = crossbeam_channel::unbounded();
+    let (sudo_tx, sudo_rx) = crossbeam_channel::bounded(1);
+
+    let installer_tx = tx.clone();
+    thread::spawn(move || {
+        if let Err(err) = run_installer(installer_tx, sudo_rx, packages, browser_selection) {
+            let _ = tx.send(InstallerEvent::Done(Some(err.to_string())));
+        }
+    });
+
+    clear_screen()?;
     let mut app = App {
         steps: vec![
             Step {
@@ -102,6 +175,11 @@ fn main() -> Result<()> {
             },
             Step {
                 name: "Installing yay".to_string(),
+                status: StepStatus::Pending,
+                err: None,
+            },
+            Step {
+                name: "Installing web browsers".to_string(),
                 status: StepStatus::Pending,
                 err: None,
             },
@@ -263,6 +341,86 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
     f.render_widget(status_line, layout[5]);
 }
 
+fn draw_browser_selector(
+    area: Rect,
+    f: &mut ratatui::Frame<'_>,
+    cursor: usize,
+    selected: &[bool],
+) {
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(PALAWAN_ART.len() as u16),
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Min(6),
+            Constraint::Length(1),
+        ])
+        .split(area);
+
+    let art_lines: Vec<Line> = PALAWAN_ART
+        .iter()
+        .map(|line| {
+            Line::from(Span::styled(
+                *line,
+                Style::default()
+                    .fg(Color::LightRed)
+                    .add_modifier(Modifier::BOLD),
+            ))
+        })
+        .collect();
+    let art = Paragraph::new(art_lines).block(Block::default());
+    f.render_widget(art, layout[0]);
+
+    let title = Line::from(vec![Span::styled(
+        "Choose Web Browsers",
+        Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+    )]);
+    let title_block = Paragraph::new(title).block(Block::default());
+    f.render_widget(title_block, layout[1]);
+
+    let help = Paragraph::new(vec![
+        Line::from("Up/Down to move, Space to toggle, Enter to continue."),
+        Line::from("Press s to skip browser installs, q to quit."),
+    ])
+    .block(Block::default().borders(Borders::ALL).title("Controls"))
+    .wrap(Wrap { trim: false });
+    f.render_widget(help, layout[2]);
+
+    let items: Vec<ListItem> = BROWSER_CHOICES
+        .iter()
+        .enumerate()
+        .map(|(idx, choice)| {
+            let marker = if selected.get(idx).copied().unwrap_or(false) {
+                "[x]"
+            } else {
+                "[ ]"
+            };
+            ListItem::new(Line::from(format!(
+                "{:>2}) {} {}",
+                idx + 1,
+                marker,
+                choice.label
+            )))
+        })
+        .collect();
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL).title("Browsers"))
+        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+    let mut state = ListState::default();
+    if !BROWSER_CHOICES.is_empty() {
+        state.select(Some(cursor.min(BROWSER_CHOICES.len() - 1)));
+    }
+    f.render_stateful_widget(list, layout[3], &mut state);
+
+    let footer = Paragraph::new(Line::from(Span::styled(
+        "Selections apply to this run only.",
+        Style::default().fg(Color::Gray),
+    )));
+    f.render_widget(footer, layout[4]);
+}
+
 fn render_step(step: &Step, spinner_idx: usize) -> Line<'static> {
     let icon = match step.status {
         StepStatus::Pending => "[ ]",
@@ -326,8 +484,16 @@ fn run_installer(
     tx: crossbeam_channel::Sender<InstallerEvent>,
     sudo_rx: crossbeam_channel::Receiver<()>,
     packages: Vec<String>,
+    browser_selection: PackageSelection,
 ) -> Result<()> {
-    send_event(&tx, InstallerEvent::Step { index: 0, status: StepStatus::Running, err: None });
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_BASE,
+            status: StepStatus::Running,
+            err: None,
+        },
+    );
     send_event(&tx, InstallerEvent::Log("Installing base packages...".to_string()));
     send_event(&tx, InstallerEvent::Log(format!("Packages: {}", packages.join(", "))));
 
@@ -341,7 +507,8 @@ fn run_installer(
         seen: HashSet::new(),
         total: packages.len(),
         installed: 0,
-        weight: 1.0 / 3.0,
+        weight: 1.0 / STEP_COUNT,
+        offset: 0.0,
     }));
 
     let args = build_pacman_args(&packages);
@@ -349,7 +516,7 @@ fn run_installer(
         send_event(
             &tx,
             InstallerEvent::Step {
-                index: 0,
+                index: STEP_BASE,
                 status: StepStatus::Failed,
                 err: Some(err.to_string()),
             },
@@ -360,19 +527,26 @@ fn run_installer(
     send_event(
         &tx,
         InstallerEvent::Step {
-            index: 0,
+            index: STEP_BASE,
             status: StepStatus::Done,
             err: None,
         },
     );
-    send_event(&tx, InstallerEvent::Progress(1.0 / 3.0));
+    send_event(&tx, InstallerEvent::Progress(1.0 / STEP_COUNT));
 
-    send_event(&tx, InstallerEvent::Step { index: 1, status: StepStatus::Running, err: None });
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_YAY,
+            status: StepStatus::Running,
+            err: None,
+        },
+    );
     if let Err(err) = install_yay(&tx, &sudo_rx) {
         send_event(
             &tx,
             InstallerEvent::Step {
-                index: 1,
+                index: STEP_YAY,
                 status: StepStatus::Failed,
                 err: Some(err.to_string()),
             },
@@ -380,19 +554,63 @@ fn run_installer(
         return Err(err);
     }
 
-    send_event(&tx, InstallerEvent::Progress(2.0 / 3.0));
+    send_event(&tx, InstallerEvent::Progress(2.0 / STEP_COUNT));
     send_event(
         &tx,
         InstallerEvent::Step {
-            index: 1,
+            index: STEP_YAY,
             status: StepStatus::Done,
             err: None,
         },
     );
-    send_event(&tx, InstallerEvent::Step { index: 2, status: StepStatus::Running, err: None });
+
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_BROWSERS,
+            status: StepStatus::Running,
+            err: None,
+        },
+    );
+    if let Err(err) = install_browsers(&tx, &sudo_rx, &browser_selection) {
+        send_event(
+            &tx,
+            InstallerEvent::Step {
+                index: STEP_BROWSERS,
+                status: StepStatus::Failed,
+                err: Some(err.to_string()),
+            },
+        );
+        return Err(err);
+    }
+    send_event(&tx, InstallerEvent::Progress(3.0 / STEP_COUNT));
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_BROWSERS,
+            status: StepStatus::Done,
+            err: None,
+        },
+    );
+
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_FINAL,
+            status: StepStatus::Running,
+            err: None,
+        },
+    );
     send_event(&tx, InstallerEvent::Log("Finalizing...".to_string()));
     thread::sleep(Duration::from_millis(300));
-    send_event(&tx, InstallerEvent::Step { index: 2, status: StepStatus::Done, err: None });
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_FINAL,
+            status: StepStatus::Done,
+            err: None,
+        },
+    );
     send_event(&tx, InstallerEvent::Progress(1.0));
     send_event(&tx, InstallerEvent::Done(None));
 
@@ -450,6 +668,120 @@ fn install_yay(
 
     let _ = fs::remove_dir_all(temp_dir);
     Ok(())
+}
+
+fn install_browsers(
+    tx: &crossbeam_channel::Sender<InstallerEvent>,
+    sudo_rx: &crossbeam_channel::Receiver<()>,
+    selection: &PackageSelection,
+) -> Result<()> {
+    if selection.is_empty() {
+        send_event(&tx, InstallerEvent::Log("Skipping browser install.".to_string()));
+        return Ok(());
+    }
+
+    send_event(&tx, InstallerEvent::Log("Installing web browsers...".to_string()));
+    ensure_sudo_ready(tx, sudo_rx)?;
+
+    let total = selection.pacman.len() + selection.yay.len();
+    let state = std::sync::Arc::new(std::sync::Mutex::new(ProgressState {
+        package_set: selection
+            .pacman
+            .iter()
+            .chain(selection.yay.iter())
+            .cloned()
+            .collect(),
+        seen: HashSet::new(),
+        total,
+        installed: 0,
+        weight: 1.0 / STEP_COUNT,
+        offset: 2.0 / STEP_COUNT,
+    }));
+
+    if !selection.pacman.is_empty() {
+        let args = build_pacman_args(&selection.pacman);
+        run_command(tx, "sudo", &args, None, Some(state.clone()))?;
+    }
+
+    if !selection.yay.is_empty() {
+        let args = build_yay_args(&selection.yay);
+        run_command(tx, "yay", &args, None, Some(state))?;
+    }
+
+    Ok(())
+}
+
+fn run_browser_selector(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+) -> Result<Option<PackageSelection>> {
+    if BROWSER_CHOICES.is_empty() {
+        return Ok(Some(PackageSelection::default()));
+    }
+
+    let mut cursor: usize = 0;
+    let mut selected = vec![false; BROWSER_CHOICES.len()];
+    loop {
+        terminal.draw(|f| draw_browser_selector(f.size(), f, cursor, &selected))?;
+
+        let timeout = Duration::from_millis(100);
+        if event::poll(timeout).context("poll events")? {
+            if let Event::Key(key) = event::read().context("read event")? {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+                match key.code {
+                    KeyCode::Up => {
+                        if cursor > 0 {
+                            cursor -= 1;
+                        }
+                    }
+                    KeyCode::Down => {
+                        if cursor + 1 < BROWSER_CHOICES.len() {
+                            cursor += 1;
+                        }
+                    }
+                    KeyCode::Char(' ') => {
+                        if let Some(flag) = selected.get_mut(cursor) {
+                            *flag = !*flag;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        let selection = selection_from_flags(&selected);
+                        return Ok(Some(selection));
+                    }
+                    KeyCode::Char('s') => {
+                        return Ok(Some(PackageSelection::default()));
+                    }
+                    KeyCode::Char('q') | KeyCode::Esc => {
+                        return Ok(None);
+                    }
+                    KeyCode::Char(ch) if ch.is_ascii_digit() => {
+                        if let Some(index) = ch.to_digit(10) {
+                            let idx = index as usize;
+                            if idx > 0 && idx <= BROWSER_CHOICES.len() {
+                                let pos = idx - 1;
+                                selected[pos] = !selected[pos];
+                                cursor = pos;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+    }
+}
+
+fn selection_from_flags(flags: &[bool]) -> PackageSelection {
+    let mut selection = PackageSelection::default();
+    for (flag, choice) in flags.iter().copied().zip(BROWSER_CHOICES.iter()) {
+        if flag {
+            extend_unique(&mut selection.pacman, choice.pacman);
+            extend_unique(&mut selection.yay, choice.yay);
+        }
+    }
+    selection
 }
 
 fn nix_euid_is_root() -> bool {
@@ -530,6 +862,16 @@ fn build_pacman_args(packages: &[String]) -> Vec<String> {
     args
 }
 
+fn build_yay_args(packages: &[String]) -> Vec<String> {
+    let mut args = vec![
+        "-S".to_string(),
+        "--noconfirm".to_string(),
+        "--needed".to_string(),
+    ];
+    args.extend(packages.iter().cloned());
+    args
+}
+
 fn run_command(
     tx: &crossbeam_channel::Sender<InstallerEvent>,
     command: &str,
@@ -582,7 +924,8 @@ fn read_stream<R: io::Read>(
                 let mut guard = shared.lock().unwrap();
                 if guard.package_set.contains(&pkg) && guard.seen.insert(pkg) {
                     guard.installed += 1;
-                    let progress = (guard.installed as f64 / guard.total as f64) * guard.weight;
+                    let progress =
+                        guard.offset + (guard.installed as f64 / guard.total as f64) * guard.weight;
                     send_event(tx, InstallerEvent::Progress(progress));
                 }
             }
@@ -647,4 +990,12 @@ fn parse_packages_arg() -> Option<String> {
         }
     }
     None
+}
+
+fn extend_unique(target: &mut Vec<String>, values: &[&str]) {
+    for value in values {
+        if !target.iter().any(|existing| existing == value) {
+            target.push(value.to_string());
+        }
+    }
 }
