@@ -1,4 +1,5 @@
 # Base packages installed on a fresh system
+mesa
 htop
 nautilus
 fastfetch

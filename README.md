@@ -30,6 +30,7 @@ Release notes
 Code layout
 - `src/main.rs` wires modules together and runs the main TUI loop.
 - `src/installer.rs` handles install steps, sudo, and command execution.
+- `src/drivers.rs` detects GPU vendors and selects driver packages.
 - `src/ui.rs` renders the installer UI and browser selection screen.
 - `src/selection.rs` defines selectable browser choices and selection logic.
 - `src/model.rs` contains shared app state and event types.
@@ -40,3 +41,7 @@ Adding a new chooser step
 - Add a TUI selector in `src/ui.rs` and return a `PackageSelection`.
 - Extend `STEP_NAMES` and install logic in `src/installer.rs`.
 - Wire the new selection into `src/main.rs` before starting the installer thread.
+
+Development overrides
+- `PALAWAN_DEV_GPU=amd|intel|nvidia` (comma-separated supported) forces GPU detection for testing.
+  - Example: `PALAWAN_DEV_GPU=nvidia,intel ./target/release/palawan-installer`

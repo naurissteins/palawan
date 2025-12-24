@@ -1,3 +1,4 @@
+mod drivers;
 mod installer;
 mod model;
 mod packages;
@@ -23,19 +24,46 @@ use ratatui::Terminal;
 use crate::installer::{ensure_sudo, run_installer, start_sudo_keepalive, sudo_available, STEP_NAMES};
 use crate::model::{App, InstallerEvent, Step, StepStatus};
 use crate::packages::{load_packages, parse_packages_arg};
-use crate::ui::{draw_ui, run_browser_selector, SPINNER_LEN};
+use crate::ui::{draw_ui, run_browser_selector, run_nvidia_selector, SPINNER_LEN};
+use crate::drivers::{
+    detect_gpu_vendors, detect_installed_nvidia_variant, driver_packages, format_gpu_summary,
+    nvidia_driver_installed, GpuVendor,
+};
 
 const LOG_CAPACITY: usize = 200;
 
 fn main() -> Result<()> {
     let packages_path = parse_packages_arg()
         .or_else(|| std::env::var("PALAWAN_PACKAGES_FILE").ok());
-    let packages = load_packages(packages_path.as_deref()).context("load package list")?;
+    let mut packages = load_packages(packages_path.as_deref()).context("load package list")?;
 
     enable_raw_mode().context("enable raw mode")?;
     clear_screen()?;
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))
         .context("init terminal")?;
+
+    let gpu_vendors = detect_gpu_override().unwrap_or_else(|| detect_gpu_vendors().unwrap_or_default());
+    let installed_nvidia_variant = if gpu_vendors.contains(&GpuVendor::Nvidia) {
+        detect_installed_nvidia_variant()
+    } else {
+        None
+    };
+    let chosen_nvidia_variant =
+        if gpu_vendors.contains(&GpuVendor::Nvidia) && !nvidia_driver_installed() {
+        match run_nvidia_selector(&mut terminal)? {
+            Some(variant) => Some(variant),
+            None => {
+                disable_raw_mode().context("disable raw mode")?;
+                let _ = clear_screen();
+                return Ok(());
+            }
+        }
+    } else {
+        None
+    };
+    let nvidia_variant = chosen_nvidia_variant.or(installed_nvidia_variant);
+    let driver_packages = driver_packages(&gpu_vendors, nvidia_variant);
+    extend_unique(&mut packages, &driver_packages);
 
     let browser_selection = match run_browser_selector(&mut terminal)? {
         Some(selection) => selection,
@@ -57,6 +85,15 @@ fn main() -> Result<()> {
     });
 
     clear_screen()?;
+    let mut logs = VecDeque::from(vec!["Starting Palawan installer...".to_string()]);
+    if let Some(summary) = format_gpu_summary(
+        &gpu_vendors,
+        nvidia_variant,
+        installed_nvidia_variant,
+    ) {
+        logs.push_back(summary);
+    }
+
     let mut app = App {
         steps: STEP_NAMES
             .iter()
@@ -67,7 +104,7 @@ fn main() -> Result<()> {
             })
             .collect(),
         progress: 0.0,
-        logs: VecDeque::from(vec!["Starting Palawan installer...".to_string()]),
+        logs,
         spinner_idx: 0,
         done: false,
         err: None,
@@ -161,4 +198,37 @@ fn push_log(logs: &mut VecDeque<String>, line: String) {
         logs.pop_front();
     }
     logs.push_back(line);
+}
+
+fn extend_unique(target: &mut Vec<String>, values: &[String]) {
+    for value in values {
+        if !target.iter().any(|existing| existing == value) {
+            target.push(value.clone());
+        }
+    }
+}
+
+fn detect_gpu_override() -> Option<std::collections::HashSet<GpuVendor>> {
+    let value = std::env::var("PALAWAN_DEV_GPU").ok()?;
+    let mut vendors = std::collections::HashSet::new();
+    for token in value.split(',') {
+        let normalized = token.trim().to_ascii_lowercase();
+        match normalized.as_str() {
+            "amd" => {
+                vendors.insert(GpuVendor::Amd);
+            }
+            "intel" => {
+                vendors.insert(GpuVendor::Intel);
+            }
+            "nvidia" => {
+                vendors.insert(GpuVendor::Nvidia);
+            }
+            _ => {}
+        }
+    }
+    if vendors.is_empty() {
+        None
+    } else {
+        Some(vendors)
+    }
 }

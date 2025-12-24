@@ -10,6 +10,7 @@ use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragra
 use ratatui::{Frame, Terminal};
 use ratatui::backend::CrosstermBackend;
 
+use crate::drivers::NvidiaVariant;
 use crate::model::{App, Step, StepStatus};
 use crate::selection::{selection_from_flags, BROWSER_CHOICES, PackageSelection};
 
@@ -350,4 +351,120 @@ pub fn run_browser_selector(
             }
         }
     }
+}
+
+pub fn run_nvidia_selector(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+) -> Result<Option<NvidiaVariant>> {
+    let options = [
+        ("Open kernel module (Turing+)", NvidiaVariant::Open),
+        ("Proprietary driver", NvidiaVariant::Proprietary),
+        ("Open-source nouveau", NvidiaVariant::Nouveau),
+    ];
+    let mut cursor: usize = 0;
+    loop {
+        terminal.draw(|f| draw_nvidia_selector(f.size(), f, cursor, &options))?;
+
+        let timeout = Duration::from_millis(100);
+        if event::poll(timeout).context("poll events")? {
+            if let Event::Key(key) = event::read().context("read event")? {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+                match key.code {
+                    KeyCode::Up => {
+                        if cursor > 0 {
+                            cursor -= 1;
+                        }
+                    }
+                    KeyCode::Down => {
+                        if cursor + 1 < options.len() {
+                            cursor += 1;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        return Ok(Some(options[cursor].1));
+                    }
+                    KeyCode::Char('q') | KeyCode::Esc => {
+                        return Ok(None);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+fn draw_nvidia_selector(
+    area: Rect,
+    f: &mut Frame<'_>,
+    cursor: usize,
+    options: &[(&str, NvidiaVariant)],
+) {
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(PALAWAN_ART.len() as u16),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Min(6),
+            Constraint::Length(1),
+        ])
+        .split(area);
+
+    let art_lines: Vec<Line> = PALAWAN_ART
+        .iter()
+        .map(|line| {
+            Line::from(Span::styled(
+                *line,
+                Style::default()
+                    .fg(Color::LightRed)
+                    .add_modifier(Modifier::BOLD),
+            ))
+        })
+        .collect();
+    let art = Paragraph::new(art_lines).block(Block::default());
+    f.render_widget(art, layout[0]);
+
+    let title = Line::from(vec![Span::styled(
+        "Choose NVIDIA Driver",
+        Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+    )]);
+    let title_block = Paragraph::new(title).block(Block::default());
+    f.render_widget(title_block, layout[1]);
+
+    let help = Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled("Up/Down", Style::default().fg(Color::Yellow)),
+            Span::raw(" to move, "),
+            Span::styled("Enter", Style::default().fg(Color::Yellow)),
+            Span::raw(" to select."),
+        ]),
+        Line::from("Press q to quit."),
+    ])
+    .block(Block::default().borders(Borders::ALL).title("Controls"))
+    .wrap(Wrap { trim: false });
+    f.render_widget(help, layout[3]);
+
+    let items: Vec<ListItem> = options
+        .iter()
+        .enumerate()
+        .map(|(idx, (label, _))| {
+            ListItem::new(Line::from(format!("{:>2}) {}", idx + 1, label)))
+        })
+        .collect();
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL).title("NVIDIA options"))
+        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+    let mut state = ListState::default();
+    state.select(Some(cursor.min(options.len().saturating_sub(1))));
+    f.render_stateful_widget(list, layout[4], &mut state);
+
+    let footer = Paragraph::new(Line::from(Span::styled(
+        "Choose the driver variant you prefer.",
+        Style::default().fg(Color::Gray),
+    )));
+    f.render_widget(footer, layout[5]);
 }
