@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::fs;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -12,11 +12,13 @@ use anyhow::{Context, Result};
 use crate::model::{InstallerEvent, StepStatus};
 use crate::selection::PackageSelection;
 
-pub const STEP_NAMES: [&str; 5] = [
+pub const STEP_NAMES: [&str; 7] = [
     "Installing base packages",
     "Installing yay",
     "Installing web browsers",
     "Installing terminals",
+    "Installing editors",
+    "Installing nvm",
     "Finalizing",
 ];
 
@@ -24,7 +26,9 @@ const STEP_BASE: usize = 0;
 const STEP_YAY: usize = 1;
 const STEP_BROWSERS: usize = 2;
 const STEP_TERMINALS: usize = 3;
-const STEP_FINAL: usize = 4;
+const STEP_EDITORS: usize = 4;
+const STEP_NVM: usize = 5;
+const STEP_FINAL: usize = 6;
 const STEP_COUNT: f64 = STEP_NAMES.len() as f64;
 
 struct ProgressState {
@@ -42,6 +46,8 @@ pub fn run_installer(
     packages: Vec<String>,
     browser_selection: PackageSelection,
     terminal_selection: PackageSelection,
+    editor_selection: PackageSelection,
+    should_install_nvm: bool,
 ) -> Result<()> {
     send_event(
         &tx,
@@ -192,6 +198,73 @@ pub fn run_installer(
     send_event(
         &tx,
         InstallerEvent::Step {
+            index: STEP_EDITORS,
+            status: StepStatus::Running,
+            err: None,
+        },
+    );
+    let editors_skipped = editor_selection.is_empty();
+    if let Err(err) = install_editors(&tx, &sudo_rx, &editor_selection) {
+        send_event(
+            &tx,
+            InstallerEvent::Step {
+                index: STEP_EDITORS,
+                status: StepStatus::Failed,
+                err: Some(err.to_string()),
+            },
+        );
+        return Err(err);
+    }
+    send_event(&tx, InstallerEvent::Progress(5.0 / STEP_COUNT));
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_EDITORS,
+            status: if editors_skipped {
+                StepStatus::Skipped
+            } else {
+                StepStatus::Done
+            },
+            err: None,
+        },
+    );
+
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_NVM,
+            status: StepStatus::Running,
+            err: None,
+        },
+    );
+    if let Err(err) = install_nvm(&tx, &sudo_rx, should_install_nvm) {
+        send_event(
+            &tx,
+            InstallerEvent::Step {
+                index: STEP_NVM,
+                status: StepStatus::Failed,
+                err: Some(err.to_string()),
+            },
+        );
+        return Err(err);
+    }
+    send_event(&tx, InstallerEvent::Progress(6.0 / STEP_COUNT));
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_NVM,
+            status: if should_install_nvm {
+                StepStatus::Done
+            } else {
+                StepStatus::Skipped
+            },
+            err: None,
+        },
+    );
+
+    send_event(
+        &tx,
+        InstallerEvent::Step {
             index: STEP_FINAL,
             status: StepStatus::Running,
             err: None,
@@ -333,6 +406,142 @@ fn install_terminals(
     if !selection.pacman.is_empty() {
         let args = build_pacman_args(&selection.pacman);
         run_command(tx, "sudo", &args, None, Some(state))?;
+    }
+
+    Ok(())
+}
+
+fn install_editors(
+    tx: &crossbeam_channel::Sender<InstallerEvent>,
+    sudo_rx: &crossbeam_channel::Receiver<()>,
+    selection: &PackageSelection,
+) -> Result<()> {
+    if selection.is_empty() {
+        send_event(&tx, InstallerEvent::Log("Skipping editor install.".to_string()));
+        return Ok(());
+    }
+
+    send_event(&tx, InstallerEvent::Log("Installing editors...".to_string()));
+    ensure_sudo_ready(tx, sudo_rx)?;
+
+    let total = selection.pacman.len() + selection.yay.len();
+    let state = Arc::new(Mutex::new(ProgressState {
+        package_set: selection
+            .pacman
+            .iter()
+            .chain(selection.yay.iter())
+            .cloned()
+            .collect(),
+        seen: HashSet::new(),
+        total,
+        installed: 0,
+        weight: 1.0 / STEP_COUNT,
+        offset: 4.0 / STEP_COUNT,
+    }));
+
+    if !selection.pacman.is_empty() {
+        let args = build_pacman_args(&selection.pacman);
+        run_command(tx, "sudo", &args, None, Some(state.clone()))?;
+    }
+
+    if !selection.yay.is_empty() {
+        let args = build_yay_args(&selection.yay);
+        run_command(tx, "yay", &args, None, Some(state))?;
+    }
+
+    Ok(())
+}
+
+fn install_nvm(
+    tx: &crossbeam_channel::Sender<InstallerEvent>,
+    sudo_rx: &crossbeam_channel::Receiver<()>,
+    install: bool,
+) -> Result<()> {
+    if !install {
+        send_event(&tx, InstallerEvent::Log("Skipping nvm install.".to_string()));
+        return Ok(());
+    }
+
+    send_event(
+        &tx,
+        InstallerEvent::Log("Installing nvm (Node Version Manager)...".to_string()),
+    );
+    ensure_sudo_ready(tx, sudo_rx)?;
+
+    let args = build_yay_args(&["nvm".to_string()]);
+    run_command(tx, "yay", &args, None, None)?;
+
+    configure_nvm_shell(tx)?;
+
+    let shell_path = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+    let uses_zsh = shell_path.ends_with("zsh");
+    let shell_cmd = if uses_zsh { "zsh" } else { "bash" };
+    let rc_file = if uses_zsh { "~/.zshrc" } else { "~/.bashrc" };
+    let shell_args = vec![
+        "-lc".to_string(),
+        format!(
+            "source {} \
+&& source /usr/share/nvm/init-nvm.sh \
+&& nvm install --lts \
+&& nvm use --lts \
+&& corepack enable \
+&& corepack prepare pnpm@latest --activate",
+            rc_file
+        ),
+    ];
+    run_command(tx, shell_cmd, &shell_args, None, None)?;
+
+    send_event(
+        &tx,
+        InstallerEvent::Log("nvm and Node.js LTS installation complete.".to_string()),
+    );
+    Ok(())
+}
+
+fn configure_nvm_shell(tx: &crossbeam_channel::Sender<InstallerEvent>) -> Result<()> {
+    let home = std::env::var("HOME").context("resolve HOME")?;
+    let bashrc = Path::new(&home).join(".bashrc");
+    let zshrc = Path::new(&home).join(".zshrc");
+    let init_line = "source /usr/share/nvm/init-nvm.sh";
+    let snippet = format!("\n# Load nvm\n{}\n", init_line);
+
+    for rc_path in [bashrc, zshrc] {
+        if !rc_path.exists() {
+            send_event(
+                tx,
+                InstallerEvent::Log(format!(
+                    "Creating {} for nvm setup.",
+                    rc_path.display()
+                )),
+            );
+            fs::File::create(&rc_path)
+                .with_context(|| format!("create {}", rc_path.display()))?;
+        }
+
+        let contents = fs::read_to_string(&rc_path).unwrap_or_default();
+        if !contents.contains(init_line) {
+            send_event(
+                tx,
+                InstallerEvent::Log(format!(
+                    "Adding nvm init to {}.",
+                    rc_path.display()
+                )),
+            );
+            let mut file = fs::OpenOptions::new()
+                .append(true)
+                .open(&rc_path)
+                .with_context(|| format!("open {}", rc_path.display()))?;
+            file.write_all(snippet.as_bytes())
+                .with_context(|| format!("write {}", rc_path.display()))?;
+        } else {
+            send_event(
+                tx,
+                InstallerEvent::Log(format!(
+                    "nvm init already present in {}.",
+                    rc_path.display()
+                )),
+            );
+        }
     }
 
     Ok(())

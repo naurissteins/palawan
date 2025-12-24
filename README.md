@@ -32,7 +32,7 @@ Code layout
 - `src/installer.rs` handles install steps, sudo, and command execution.
 - `src/drivers.rs` detects GPU vendors and selects driver packages.
 - `src/ui.rs` renders the installer UI and selection screens.
-- `src/selection.rs` defines selectable browser/terminal choices and selection logic.
+- `src/selection.rs` defines selectable browser/terminal/editor choices and selection logic.
 - `src/model.rs` contains shared app state and event types.
 - `src/packages.rs` loads package lists and parses CLI args.
 

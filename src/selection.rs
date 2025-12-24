@@ -25,6 +25,11 @@ const LIBREWOLF_YAY: [&str; 1] = ["librewolf-bin"];
 const GHOSTTY_PACMAN: [&str; 1] = ["ghostty"];
 const KITTY_PACMAN: [&str; 1] = ["kitty"];
 const ALACRITTY_PACMAN: [&str; 1] = ["alacritty"];
+const ZED_PACMAN: [&str; 1] = ["zed"];
+const CURSOR_YAY: [&str; 1] = ["cursor-bin"];
+const VSCODE_YAY: [&str; 1] = ["visual-studio-code-bin"];
+const VSCODIUM_YAY: [&str; 1] = ["vscodium-bin"];
+const SUBLIME_YAY: [&str; 1] = ["sublime-text-4"];
 
 pub const BROWSER_CHOICES: [InstallChoice; 6] = [
     InstallChoice {
@@ -74,6 +79,34 @@ pub const TERMINAL_CHOICES: [InstallChoice; 3] = [
         label: "Alacritty",
         pacman: &ALACRITTY_PACMAN,
         yay: &[],
+    },
+];
+
+pub const EDITOR_CHOICES: [InstallChoice; 5] = [
+    InstallChoice {
+        label: "Zed",
+        pacman: &ZED_PACMAN,
+        yay: &[],
+    },
+    InstallChoice {
+        label: "Cursor",
+        pacman: &[],
+        yay: &CURSOR_YAY,
+    },
+    InstallChoice {
+        label: "Visual Studio Code",
+        pacman: &[],
+        yay: &VSCODE_YAY,
+    },
+    InstallChoice {
+        label: "VSCodium",
+        pacman: &[],
+        yay: &VSCODIUM_YAY,
+    },
+    InstallChoice {
+        label: "Sublime Text 4",
+        pacman: &[],
+        yay: &SUBLIME_YAY,
     },
 ];
 
