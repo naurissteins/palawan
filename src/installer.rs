@@ -10,15 +10,16 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 
 use crate::model::{InstallerEvent, StepStatus};
-use crate::selection::PackageSelection;
+use crate::selection::{NpmSelection, PackageSelection};
 
-pub const STEP_NAMES: [&str; 7] = [
+pub const STEP_NAMES: [&str; 8] = [
     "Installing base packages",
     "Installing yay",
     "Installing web browsers",
     "Installing terminals",
     "Installing editors",
     "Installing nvm",
+    "Installing coding agents",
     "Finalizing",
 ];
 
@@ -28,7 +29,8 @@ const STEP_BROWSERS: usize = 2;
 const STEP_TERMINALS: usize = 3;
 const STEP_EDITORS: usize = 4;
 const STEP_NVM: usize = 5;
-const STEP_FINAL: usize = 6;
+const STEP_CODING_AGENTS: usize = 6;
+const STEP_FINAL: usize = 7;
 const STEP_COUNT: f64 = STEP_NAMES.len() as f64;
 
 struct ProgressState {
@@ -48,6 +50,7 @@ pub fn run_installer(
     terminal_selection: PackageSelection,
     editor_selection: PackageSelection,
     should_install_nvm: bool,
+    coding_agent_selection: NpmSelection,
 ) -> Result<()> {
     send_event(
         &tx,
@@ -265,6 +268,40 @@ pub fn run_installer(
     send_event(
         &tx,
         InstallerEvent::Step {
+            index: STEP_CODING_AGENTS,
+            status: StepStatus::Running,
+            err: None,
+        },
+    );
+    let coding_agents_skipped = coding_agent_selection.is_empty();
+    if let Err(err) = install_coding_agents(&tx, &coding_agent_selection) {
+        send_event(
+            &tx,
+            InstallerEvent::Step {
+                index: STEP_CODING_AGENTS,
+                status: StepStatus::Failed,
+                err: Some(err.to_string()),
+            },
+        );
+        return Err(err);
+    }
+    send_event(&tx, InstallerEvent::Progress(7.0 / STEP_COUNT));
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_CODING_AGENTS,
+            status: if coding_agents_skipped {
+                StepStatus::Skipped
+            } else {
+                StepStatus::Done
+            },
+            err: None,
+        },
+    );
+
+    send_event(
+        &tx,
+        InstallerEvent::Step {
             index: STEP_FINAL,
             status: StepStatus::Running,
             err: None,
@@ -473,10 +510,7 @@ fn install_nvm(
 
     configure_nvm_shell(tx)?;
 
-    let shell_path = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
-    let uses_zsh = shell_path.ends_with("zsh");
-    let shell_cmd = if uses_zsh { "zsh" } else { "bash" };
-    let rc_file = if uses_zsh { "~/.zshrc" } else { "~/.bashrc" };
+    let (shell_cmd, rc_file) = user_shell();
     let shell_args = vec![
         "-lc".to_string(),
         format!(
@@ -489,7 +523,7 @@ fn install_nvm(
             rc_file
         ),
     ];
-    run_command(tx, shell_cmd, &shell_args, None, None)?;
+    run_command(tx, &shell_cmd, &shell_args, None, None)?;
 
     send_event(
         &tx,
@@ -545,6 +579,39 @@ fn configure_nvm_shell(tx: &crossbeam_channel::Sender<InstallerEvent>) -> Result
     }
 
     Ok(())
+}
+
+fn install_coding_agents(
+    tx: &crossbeam_channel::Sender<InstallerEvent>,
+    selection: &NpmSelection,
+) -> Result<()> {
+    if selection.is_empty() {
+        send_event(&tx, InstallerEvent::Log("Skipping coding agent install.".to_string()));
+        return Ok(());
+    }
+
+    send_event(
+        &tx,
+        InstallerEvent::Log("Installing coding agents via npm...".to_string()),
+    );
+
+    let (shell_cmd, rc_file) = user_shell();
+    let packages = selection.packages.join(" ");
+    let shell_args = vec![
+        "-lc".to_string(),
+        format!("source {} && npm install -g {}", rc_file, packages),
+    ];
+    run_command(tx, &shell_cmd, &shell_args, None, None)?;
+
+    Ok(())
+}
+
+fn user_shell() -> (String, String) {
+    let shell_path = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+    let uses_zsh = shell_path.ends_with("zsh");
+    let shell_cmd = if uses_zsh { "zsh" } else { "bash" };
+    let rc_file = if uses_zsh { "~/.zshrc" } else { "~/.bashrc" };
+    (shell_cmd.to_string(), rc_file.to_string())
 }
 
 fn nix_euid_is_root() -> bool {

@@ -10,10 +10,26 @@ impl PackageSelection {
     }
 }
 
+#[derive(Default, Clone)]
+pub struct NpmSelection {
+    pub packages: Vec<String>,
+}
+
+impl NpmSelection {
+    pub fn is_empty(&self) -> bool {
+        self.packages.is_empty()
+    }
+}
+
 pub struct InstallChoice {
     pub label: &'static str,
     pub pacman: &'static [&'static str],
     pub yay: &'static [&'static str],
+}
+
+pub struct NpmChoice {
+    pub label: &'static str,
+    pub packages: &'static [&'static str],
 }
 
 const FIREFOX_PACMAN: [&str; 2] = ["firefox", "firefox-ublock-origin"];
@@ -30,6 +46,9 @@ const CURSOR_YAY: [&str; 1] = ["cursor-bin"];
 const VSCODE_YAY: [&str; 1] = ["visual-studio-code-bin"];
 const VSCODIUM_YAY: [&str; 1] = ["vscodium-bin"];
 const SUBLIME_YAY: [&str; 1] = ["sublime-text-4"];
+const CODEX_NPM: [&str; 1] = ["@openai/codex"];
+const GEMINI_NPM: [&str; 1] = ["@google/gemini-cli"];
+const CLAUDE_NPM: [&str; 1] = ["@anthropic-ai/claude-code"];
 
 pub const BROWSER_CHOICES: [InstallChoice; 6] = [
     InstallChoice {
@@ -110,6 +129,21 @@ pub const EDITOR_CHOICES: [InstallChoice; 5] = [
     },
 ];
 
+pub const CODING_AGENT_CHOICES: [NpmChoice; 3] = [
+    NpmChoice {
+        label: "Codex",
+        packages: &CODEX_NPM,
+    },
+    NpmChoice {
+        label: "Gemini",
+        packages: &GEMINI_NPM,
+    },
+    NpmChoice {
+        label: "Claude",
+        packages: &CLAUDE_NPM,
+    },
+];
+
 pub fn selection_from_flags(flags: &[bool]) -> PackageSelection {
     selection_from_flags_for(flags, &BROWSER_CHOICES)
 }
@@ -123,6 +157,19 @@ pub fn selection_from_flags_for(
         if flag {
             extend_unique(&mut selection.pacman, choice.pacman);
             extend_unique(&mut selection.yay, choice.yay);
+        }
+    }
+    selection
+}
+
+pub fn selection_from_flags_for_npm(
+    flags: &[bool],
+    choices: &[NpmChoice],
+) -> NpmSelection {
+    let mut selection = NpmSelection::default();
+    for (flag, choice) in flags.iter().copied().zip(choices.iter()) {
+        if flag {
+            extend_unique(&mut selection.packages, choice.packages);
         }
     }
     selection

@@ -27,6 +27,7 @@ use crate::packages::{load_packages, parse_packages_arg};
 use crate::ui::{
     draw_ui,
     run_browser_selector,
+    run_coding_agent_selector,
     run_editor_selector,
     run_nvm_selector,
     run_nvidia_selector,
@@ -105,6 +106,14 @@ fn main() -> Result<()> {
             return Ok(());
         }
     };
+    let coding_agent_selection = match run_coding_agent_selector(&mut terminal)? {
+        Some(selection) => selection,
+        None => {
+            disable_raw_mode().context("disable raw mode")?;
+            let _ = clear_screen();
+            return Ok(());
+        }
+    };
 
     let (tx, rx) = crossbeam_channel::unbounded();
     let (sudo_tx, sudo_rx) = crossbeam_channel::bounded(1);
@@ -119,6 +128,7 @@ fn main() -> Result<()> {
             terminal_selection,
             editor_selection,
             install_nvm,
+            coding_agent_selection,
         ) {
             let _ = tx.send(InstallerEvent::Done(Some(err.to_string())));
         }
