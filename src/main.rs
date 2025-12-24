@@ -268,6 +268,7 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
         .constraints([
             Constraint::Length(PALAWAN_ART.len() as u16),
             Constraint::Length(1),
+            Constraint::Length(1),
             Constraint::Length(3),
             Constraint::Length(app.steps.len() as u16 + 2),
             Constraint::Min(6),
@@ -302,7 +303,7 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
         .block(Block::default().borders(Borders::ALL).title("Progress"))
         .gauge_style(Style::default().fg(Color::Cyan))
         .ratio(app.progress);
-    f.render_widget(progress, layout[2]);
+    f.render_widget(progress, layout[3]);
 
     let step_lines: Vec<Line> = app
         .steps
@@ -312,7 +313,7 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
     let steps = Paragraph::new(step_lines)
         .block(Block::default().borders(Borders::ALL).title("Steps"))
         .wrap(Wrap { trim: false });
-    f.render_widget(steps, layout[3]);
+    f.render_widget(steps, layout[4]);
 
     let log_lines: Vec<Line> = app
         .logs
@@ -322,7 +323,7 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
     let logs = Paragraph::new(log_lines)
         .block(Block::default().borders(Borders::ALL).title("Logs"))
         .wrap(Wrap { trim: false });
-    f.render_widget(logs, layout[4]);
+    f.render_widget(logs, layout[5]);
 
     let status = if app.done {
         if app.err.is_some() {
@@ -341,7 +342,7 @@ fn draw_ui(area: Rect, f: &mut ratatui::Frame<'_>, app: &App) {
         Style::default().fg(Color::Gray)
     };
     let status_line = Paragraph::new(Line::from(Span::styled(status, status_style)));
-    f.render_widget(status_line, layout[5]);
+    f.render_widget(status_line, layout[6]);
 }
 
 fn draw_browser_selector(
