@@ -13,9 +13,9 @@ use crate::model::{InstallerEvent, StepStatus};
 use crate::selection::{NpmSelection, PackageSelection};
 
 pub const STEP_NAMES: [&str; 9] = [
+    "Configuring Chaotic-AUR",
     "Installing base packages",
     "Installing Hyprland",
-    "Installing yay",
     "Installing web browsers",
     "Installing terminals",
     "Installing editors",
@@ -24,9 +24,9 @@ pub const STEP_NAMES: [&str; 9] = [
     "Finalizing",
 ];
 
-const STEP_BASE: usize = 0;
-const STEP_HYPRLAND: usize = 1;
-const STEP_YAY: usize = 2;
+const STEP_CHAOTIC: usize = 0;
+const STEP_BASE: usize = 1;
+const STEP_HYPRLAND: usize = 2;
 const STEP_BROWSERS: usize = 3;
 const STEP_TERMINALS: usize = 4;
 const STEP_EDITORS: usize = 5;
@@ -58,6 +58,35 @@ pub fn run_installer(
     send_event(
         &tx,
         InstallerEvent::Step {
+            index: STEP_CHAOTIC,
+            status: StepStatus::Running,
+            err: None,
+        },
+    );
+    if let Err(err) = configure_chaotic_aur(&tx, &sudo_rx) {
+        send_event(
+            &tx,
+            InstallerEvent::Step {
+                index: STEP_CHAOTIC,
+                status: StepStatus::Failed,
+                err: Some(err.to_string()),
+            },
+        );
+        return Err(err);
+    }
+    send_event(
+        &tx,
+        InstallerEvent::Step {
+            index: STEP_CHAOTIC,
+            status: StepStatus::Done,
+            err: None,
+        },
+    );
+    send_event(&tx, InstallerEvent::Progress(1.0 / STEP_COUNT));
+
+    send_event(
+        &tx,
+        InstallerEvent::Step {
             index: STEP_BASE,
             status: StepStatus::Running,
             err: None,
@@ -77,7 +106,7 @@ pub fn run_installer(
         total: packages.len(),
         installed: 0,
         weight: 1.0 / STEP_COUNT,
-        offset: 0.0,
+        offset: 1.0 / STEP_COUNT,
     }));
 
     let args = build_pacman_args(&packages);
@@ -101,7 +130,7 @@ pub fn run_installer(
             err: None,
         },
     );
-    send_event(&tx, InstallerEvent::Progress(1.0 / STEP_COUNT));
+    send_event(&tx, InstallerEvent::Progress(2.0 / STEP_COUNT));
 
     send_event(
         &tx,
@@ -128,7 +157,7 @@ pub fn run_installer(
             total: hyprland_packages.len(),
             installed: 0,
             weight: 1.0 / STEP_COUNT,
-            offset: 1.0 / STEP_COUNT,
+            offset: 2.0 / STEP_COUNT,
         }));
         let args = build_pacman_args(&hyprland_packages);
         if let Err(err) = run_command(&tx, "sudo", &args, None, Some(hyprland_state)) {
@@ -157,37 +186,7 @@ pub fn run_installer(
             err: None,
         },
     );
-    send_event(&tx, InstallerEvent::Progress(2.0 / STEP_COUNT));
-
-    send_event(
-        &tx,
-        InstallerEvent::Step {
-            index: STEP_YAY,
-            status: StepStatus::Running,
-            err: None,
-        },
-    );
-    if let Err(err) = install_yay(&tx, &sudo_rx) {
-        send_event(
-            &tx,
-            InstallerEvent::Step {
-                index: STEP_YAY,
-                status: StepStatus::Failed,
-                err: Some(err.to_string()),
-            },
-        );
-        return Err(err);
-    }
-
     send_event(&tx, InstallerEvent::Progress(3.0 / STEP_COUNT));
-    send_event(
-        &tx,
-        InstallerEvent::Step {
-            index: STEP_YAY,
-            status: StepStatus::Done,
-            err: None,
-        },
-    );
 
     send_event(
         &tx,
@@ -382,56 +381,62 @@ pub fn run_installer(
     Ok(())
 }
 
-fn install_yay(
+fn configure_chaotic_aur(
     tx: &crossbeam_channel::Sender<InstallerEvent>,
     sudo_rx: &crossbeam_channel::Receiver<()>,
 ) -> Result<()> {
-    send_event(&tx, InstallerEvent::Log("Installing yay (AUR helper)...".to_string()));
-
-    if std::env::var("USER").unwrap_or_default() == "root" || nix_euid_is_root() {
-        anyhow::bail!("yay install must run as a non-root user");
-    }
-
-    ensure_sudo_ready(tx, sudo_rx)?;
-    let deps = vec!["git".to_string(), "base-devel".to_string()];
-    let args = build_pacman_args(&deps);
-    run_command(tx, "sudo", &args, None, None)?;
-
-    let yay_installed = Command::new("yay")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false);
-    if yay_installed {
-        send_event(&tx, InstallerEvent::Log("yay is already installed, skipping.".to_string()));
+    let pacman_conf = "/etc/pacman.conf";
+    let contents = fs::read_to_string(pacman_conf).unwrap_or_default();
+    if contents.contains("[chaotic-aur]") {
+        send_event(
+            tx,
+            InstallerEvent::Log("Chaotic-AUR already configured, skipping.".to_string()),
+        );
         return Ok(());
     }
 
-    send_event(&tx, InstallerEvent::Log("yay not found, installing...".to_string()));
-    let temp_dir = "/tmp/yay-bin";
-    if Path::new(temp_dir).exists() {
-        let _ = fs::remove_dir_all(temp_dir);
-    }
-
-    let clone_args = vec![
-        "clone".to_string(),
-        "https://aur.archlinux.org/yay-bin.git".to_string(),
-        temp_dir.to_string(),
-    ];
-    run_command(tx, "git", &clone_args, None, None)?;
-
+    send_event(
+        tx,
+        InstallerEvent::Log("Configuring Chaotic-AUR repository...".to_string()),
+    );
     ensure_sudo_ready(tx, sudo_rx)?;
-    let makepkg_args = vec![
-        "-si".to_string(),
-        "--noconfirm".to_string(),
-        "--needed".to_string(),
-        "--syncdeps".to_string(),
-    ];
-    run_command(tx, "makepkg", &makepkg_args, Some(temp_dir), None)?;
 
-    let _ = fs::remove_dir_all(temp_dir);
+    let recv_key_args = vec![
+        "pacman-key".to_string(),
+        "--recv-key".to_string(),
+        "3056513887B78AEB".to_string(),
+        "--keyserver".to_string(),
+        "keyserver.ubuntu.com".to_string(),
+    ];
+    run_command(tx, "sudo", &recv_key_args, None, None)?;
+
+    let lsign_args = vec![
+        "pacman-key".to_string(),
+        "--lsign-key".to_string(),
+        "3056513887B78AEB".to_string(),
+    ];
+    run_command(tx, "sudo", &lsign_args, None, None)?;
+
+    let keyring_args = vec![
+        "pacman".to_string(),
+        "-U".to_string(),
+        "--noconfirm".to_string(),
+        "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst".to_string(),
+        "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst".to_string(),
+    ];
+    run_command(tx, "sudo", &keyring_args, None, None)?;
+
+    let append_repo = "printf '\\n[chaotic-aur]\\nInclude = /etc/pacman.d/chaotic-mirrorlist\\n' >> /etc/pacman.conf";
+    let append_args = vec!["sh".to_string(), "-c".to_string(), append_repo.to_string()];
+    run_command(tx, "sudo", &append_args, None, None)?;
+
+    let refresh_args = vec![
+        "pacman".to_string(),
+        "-Sy".to_string(),
+        "--noconfirm".to_string(),
+    ];
+    run_command(tx, "sudo", &refresh_args, None, None)?;
+
     Ok(())
 }
 
@@ -671,17 +676,6 @@ fn user_shell() -> (String, String) {
     let shell_cmd = if uses_zsh { "zsh" } else { "bash" };
     let rc_file = if uses_zsh { "~/.zshrc" } else { "~/.bashrc" };
     (shell_cmd.to_string(), rc_file.to_string())
-}
-
-fn nix_euid_is_root() -> bool {
-    #[cfg(target_family = "unix")]
-    {
-        unsafe { libc::geteuid() == 0 }
-    }
-    #[cfg(not(target_family = "unix"))]
-    {
-        false
-    }
 }
 
 pub fn ensure_sudo() -> Result<()> {

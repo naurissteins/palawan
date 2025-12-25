@@ -7,10 +7,7 @@ mod ui;
 
 use std::collections::VecDeque;
 use std::io;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -118,6 +115,21 @@ fn main() -> Result<()> {
         }
     };
 
+    let mut sudo_verified = sudo_available();
+    let mut sudo_keepalive = if sudo_verified {
+        Some(start_sudo_keepalive())
+    } else {
+        disable_raw_mode().context("disable raw mode")?;
+        clear_screen()?;
+        println!("Sudo password is required to continue.");
+        ensure_sudo()?;
+        sudo_verified = true;
+        let keepalive = Some(start_sudo_keepalive());
+        enable_raw_mode().context("enable raw mode")?;
+        clear_screen()?;
+        keepalive
+    };
+
     let (tx, rx) = crossbeam_channel::unbounded();
     let (sudo_tx, sudo_rx) = crossbeam_channel::bounded(1);
 
@@ -140,6 +152,9 @@ fn main() -> Result<()> {
 
     clear_screen()?;
     let mut logs = VecDeque::from(vec!["Starting Palawan installer...".to_string()]);
+    if sudo_verified {
+        logs.push_back("Sudo verified.".to_string());
+    }
     if let Some(summary) = format_gpu_summary(
         &gpu_vendors,
         nvidia_variant,
@@ -168,10 +183,6 @@ fn main() -> Result<()> {
     terminal.draw(|f| draw_ui(f.size(), f, &app))?;
 
     let mut last_tick = Instant::now();
-    let mut sudo_keepalive: Option<Arc<AtomicBool>> = None;
-    if sudo_available() {
-        sudo_keepalive = Some(start_sudo_keepalive());
-    }
     loop {
         terminal.draw(|f| draw_ui(f.size(), f, &app))?;
 

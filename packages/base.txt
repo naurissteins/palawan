@@ -12,3 +12,4 @@ gnome-themes-extra
 zsh
 qt5-multimedia
 qt6-multimedia
+yay
