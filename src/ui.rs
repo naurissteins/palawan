@@ -3,37 +3,29 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::{Frame, Terminal};
-use ratatui::backend::CrosstermBackend;
 
 use crate::drivers::NvidiaVariant;
 use crate::model::{App, Step, StepStatus};
 use crate::selection::{
-    selection_from_flags,
-    selection_from_flags_for,
-    selection_from_flags_for_npm,
-    BROWSER_CHOICES,
-    CODING_AGENT_CHOICES,
-    EDITOR_CHOICES,
-    NpmSelection,
-    PackageSelection,
-    TERMINAL_CHOICES,
+    selection_from_flags, selection_from_flags_for, selection_from_flags_for_npm, NpmSelection,
+    PackageSelection, BROWSER_CHOICES, CODING_AGENT_CHOICES, EDITOR_CHOICES, TERMINAL_CHOICES,
 };
 
 pub const SPINNER_LEN: usize = 4;
 const SPINNER: [&str; SPINNER_LEN] = ["|", "/", "-", "\\"];
-const PALAWAN_ART: [&str; 7] = [
-    "                 ▄▄▄",
-    "██████╗  █████╗ ██╗      █████╗ ██╗    ██╗ █████╗ ███╗   ██╗",
-    "██╔══██╗██╔══██╗██║     ██╔══██╗██║    ██║██╔══██╗████╗  ██║",
-    "██████╔╝███████║██║     ███████║██║ █╗ ██║███████║██╔██╗ ██║",
-    "██╔═══╝ ██╔══██║██║     ██╔══██║██║███╗██║██╔══██║██║╚██╗██║",
-    "██║     ██║  ██║███████╗██║  ██║╚███╔███╔╝██║  ██║██║ ╚████║",
-    "╚═╝     ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═══╝",
+const PALAWAN_ART: [&str; 6] = [
+    "██╗  ██╗ ██╗    ██╗ ██╗ ███╗   ███╗ ██╗   ██╗",
+    "██║ ██╔╝ ██║    ██║ ██║ ████╗ ████║ ╚██╗ ██╔╝",
+    "█████╔╝  ██║ █╗ ██║ ██║ ██╔████╔██║  ╚████╔╝ ",
+    "██╔═██╗  ██║███╗██║ ██║ ██║╚██╔╝██║   ╚██╔╝  ",
+    "██║  ██╗ ╚███╔███╔╝ ██║ ██║ ╚═╝ ██║    ██║   ",
+    "╚═╝  ╚═╝  ╚══╝╚══╝  ╚═╝ ╚═╝     ╚═╝    ╚═╝   ",
 ];
 
 pub fn draw_ui(area: Rect, f: &mut Frame<'_>, app: &App) {
@@ -67,7 +59,9 @@ pub fn draw_ui(area: Rect, f: &mut Frame<'_>, app: &App) {
 
     let title = Line::from(vec![Span::styled(
         "Palawan Installer",
-        Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(Modifier::BOLD),
     )]);
     let title_block = Paragraph::new(title).block(Block::default());
     f.render_widget(title_block, layout[1]);
@@ -148,7 +142,9 @@ fn draw_browser_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected:
 
     let title = Line::from(vec![Span::styled(
         "Choose Web Browsers",
-        Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(Modifier::BOLD),
     )]);
     let title_block = Paragraph::new(title).block(Block::default());
     f.render_widget(title_block, layout[1]);
@@ -213,7 +209,11 @@ fn draw_browser_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected:
         .collect();
     let list = List::new(items)
         .block(Block::default().borders(Borders::ALL).title(list_title))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
     let mut state = ListState::default();
     if !BROWSER_CHOICES.is_empty() {
         state.select(Some(cursor.min(BROWSER_CHOICES.len() - 1)));
@@ -254,8 +254,7 @@ fn draw_browser_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected:
         List::new(vec![ListItem::new(Line::from("None selected"))])
             .block(Block::default().borders(Borders::ALL).title("Selection"))
     } else {
-        List::new(selected_items)
-            .block(Block::default().borders(Borders::ALL).title("Selection"))
+        List::new(selected_items).block(Block::default().borders(Borders::ALL).title("Selection"))
     };
     f.render_widget(selected_block, main_layout[1]);
 
@@ -393,7 +392,9 @@ fn draw_terminal_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected
 
     let title = Line::from(vec![Span::styled(
         "Choose Terminals",
-        Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(Modifier::BOLD),
     )]);
     let title_block = Paragraph::new(title).block(Block::default());
     f.render_widget(title_block, layout[1]);
@@ -448,7 +449,11 @@ fn draw_terminal_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected
         .collect();
     let list = List::new(items)
         .block(Block::default().borders(Borders::ALL).title(list_title))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
     let mut state = ListState::default();
     if !TERMINAL_CHOICES.is_empty() {
         state.select(Some(cursor.min(TERMINAL_CHOICES.len() - 1)));
@@ -479,8 +484,7 @@ fn draw_terminal_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected
         List::new(vec![ListItem::new(Line::from("None selected"))])
             .block(Block::default().borders(Borders::ALL).title("Selection"))
     } else {
-        List::new(selected_items)
-            .block(Block::default().borders(Borders::ALL).title("Selection"))
+        List::new(selected_items).block(Block::default().borders(Borders::ALL).title("Selection"))
     };
     f.render_widget(selected_block, main_layout[1]);
 
@@ -582,7 +586,9 @@ fn draw_editor_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected: 
 
     let title = Line::from(vec![Span::styled(
         "Choose Editors",
-        Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(Modifier::BOLD),
     )]);
     let title_block = Paragraph::new(title).block(Block::default());
     f.render_widget(title_block, layout[1]);
@@ -647,7 +653,11 @@ fn draw_editor_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected: 
         .collect();
     let list = List::new(items)
         .block(Block::default().borders(Borders::ALL).title(list_title))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
     let mut state = ListState::default();
     if !EDITOR_CHOICES.is_empty() {
         state.select(Some(cursor.min(EDITOR_CHOICES.len() - 1)));
@@ -688,8 +698,7 @@ fn draw_editor_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected: 
         List::new(vec![ListItem::new(Line::from("None selected"))])
             .block(Block::default().borders(Borders::ALL).title("Selection"))
     } else {
-        List::new(selected_items)
-            .block(Block::default().borders(Borders::ALL).title("Selection"))
+        List::new(selected_items).block(Block::default().borders(Borders::ALL).title("Selection"))
     };
     f.render_widget(selected_block, main_layout[1]);
 
@@ -791,7 +800,9 @@ fn draw_nvm_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, options: &[&s
 
     let title = Line::from(vec![Span::styled(
         "Install nvm (Node Version Manager)?",
-        Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(Modifier::BOLD),
     )]);
     let title_block = Paragraph::new(title).block(Block::default());
     f.render_widget(title_block, layout[1]);
@@ -816,7 +827,11 @@ fn draw_nvm_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, options: &[&s
         .collect();
     let list = List::new(items)
         .block(Block::default().borders(Borders::ALL).title("nvm setup"))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
     let mut state = ListState::default();
     state.select(Some(cursor.min(options.len().saturating_sub(1))));
     f.render_stateful_widget(list, layout[4], &mut state);
@@ -896,7 +911,9 @@ fn draw_coding_agent_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, sele
 
     let title = Line::from(vec![Span::styled(
         "Choose Coding Agents",
-        Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(Modifier::BOLD),
     )]);
     let title_block = Paragraph::new(title).block(Block::default());
     f.render_widget(title_block, layout[1]);
@@ -951,7 +968,11 @@ fn draw_coding_agent_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, sele
         .collect();
     let list = List::new(items)
         .block(Block::default().borders(Borders::ALL).title(list_title))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
     let mut state = ListState::default();
     if !CODING_AGENT_CHOICES.is_empty() {
         state.select(Some(cursor.min(CODING_AGENT_CHOICES.len() - 1)));
@@ -982,8 +1003,7 @@ fn draw_coding_agent_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, sele
         List::new(vec![ListItem::new(Line::from("None selected"))])
             .block(Block::default().borders(Borders::ALL).title("Selection"))
     } else {
-        List::new(selected_items)
-            .block(Block::default().borders(Borders::ALL).title("Selection"))
+        List::new(selected_items).block(Block::default().borders(Borders::ALL).title("Selection"))
     };
     f.render_widget(selected_block, main_layout[1]);
 
@@ -1133,7 +1153,9 @@ fn draw_nvidia_selector(
 
     let title = Line::from(vec![Span::styled(
         "Choose NVIDIA Driver",
-        Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(Modifier::BOLD),
     )]);
     let title_block = Paragraph::new(title).block(Block::default());
     f.render_widget(title_block, layout[1]);
@@ -1154,13 +1176,19 @@ fn draw_nvidia_selector(
     let items: Vec<ListItem> = options
         .iter()
         .enumerate()
-        .map(|(idx, (label, _))| {
-            ListItem::new(Line::from(format!("{:>2}) {}", idx + 1, label)))
-        })
+        .map(|(idx, (label, _))| ListItem::new(Line::from(format!("{:>2}) {}", idx + 1, label))))
         .collect();
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("NVIDIA options"))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("NVIDIA options"),
+        )
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
     let mut state = ListState::default();
     state.select(Some(cursor.min(options.len().saturating_sub(1))));
     f.render_stateful_widget(list, layout[4], &mut state);

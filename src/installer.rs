@@ -579,6 +579,7 @@ fn install_nvm(
         "-lc".to_string(),
         format!(
             "source {} \
+&& export NVM_DIR=\"$HOME/.nvm\" \
 && source /usr/share/nvm/init-nvm.sh \
 && nvm install --lts \
 && nvm use --lts \
@@ -663,7 +664,13 @@ fn install_coding_agents(
     let packages = selection.packages.join(" ");
     let shell_args = vec![
         "-lc".to_string(),
-        format!("source {} && npm install -g {}", rc_file, packages),
+        format!(
+            "source {} \
+&& export NVM_DIR=\"$HOME/.nvm\" \
+&& source /usr/share/nvm/init-nvm.sh \
+&& npm install -g {}",
+            rc_file, packages
+        ),
     ];
     run_command(tx, &shell_cmd, &shell_args, None, None)?;
 
@@ -674,7 +681,12 @@ fn user_shell() -> (String, String) {
     let shell_path = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
     let uses_zsh = shell_path.ends_with("zsh");
     let shell_cmd = if uses_zsh { "zsh" } else { "bash" };
-    let rc_file = if uses_zsh { "~/.zshrc" } else { "~/.bashrc" };
+    let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
+    let rc_file = if uses_zsh {
+        format!("{}/.zshrc", home)
+    } else {
+        format!("{}/.bashrc", home)
+    };
     (shell_cmd.to_string(), rc_file.to_string())
 }
 
