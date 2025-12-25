@@ -28,6 +28,18 @@ const PALAWAN_ART: [&str; 6] = [
     "╚═╝  ╚═╝  ╚══╝╚══╝  ╚═╝ ╚═╝     ╚═╝    ╚═╝   ",
 ];
 
+#[derive(Debug, Clone)]
+pub struct ReviewItem {
+    pub label: String,
+    pub value: String,
+}
+
+pub enum ReviewAction {
+    Confirm,
+    Edit,
+    Quit,
+}
+
 pub fn draw_ui(area: Rect, f: &mut Frame<'_>, app: &App) {
     let layout = Layout::default()
         .direction(Direction::Vertical)
@@ -299,6 +311,99 @@ fn style_for_status(status: StepStatus) -> Style {
         StepStatus::Skipped => Style::default().fg(Color::LightYellow),
         StepStatus::Failed => Style::default().fg(Color::LightRed),
     }
+}
+
+pub fn run_review(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    items: &[ReviewItem],
+) -> Result<ReviewAction> {
+    loop {
+        terminal.draw(|f| draw_review(f.size(), f, items))?;
+        let timeout = Duration::from_millis(100);
+        if event::poll(timeout).context("poll events")? {
+            if let Event::Key(key) = event::read().context("read event")? {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+                match key.code {
+                    KeyCode::Enter => return Ok(ReviewAction::Confirm),
+                    KeyCode::Char('e') => return Ok(ReviewAction::Edit),
+                    KeyCode::Char('q') | KeyCode::Esc => return Ok(ReviewAction::Quit),
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+fn draw_review(area: Rect, f: &mut Frame<'_>, items: &[ReviewItem]) {
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(PALAWAN_ART.len() as u16),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(4),
+            Constraint::Min(6),
+            Constraint::Length(1),
+        ])
+        .split(area);
+
+    let art_lines: Vec<Line> = PALAWAN_ART
+        .iter()
+        .map(|line| {
+            Line::from(Span::styled(
+                *line,
+                Style::default()
+                    .fg(Color::LightRed)
+                    .add_modifier(Modifier::BOLD),
+            ))
+        })
+        .collect();
+    let art = Paragraph::new(art_lines).block(Block::default());
+    f.render_widget(art, layout[0]);
+
+    let title = Line::from(vec![Span::styled(
+        "Review selections",
+        Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(Modifier::BOLD),
+    )]);
+    let title_block = Paragraph::new(title).block(Block::default());
+    f.render_widget(title_block, layout[1]);
+
+    let help = Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled("Enter", Style::default().fg(Color::Yellow)),
+            Span::raw(" to confirm, "),
+            Span::styled("E", Style::default().fg(Color::Yellow)),
+            Span::raw(" to edit, "),
+            Span::styled("Q", Style::default().fg(Color::Yellow)),
+            Span::raw(" to quit."),
+        ]),
+    ])
+    .block(Block::default().borders(Borders::ALL).title("Controls"))
+    .wrap(Wrap { trim: false });
+    f.render_widget(help, layout[3]);
+
+    let list_items: Vec<ListItem> = items
+        .iter()
+        .map(|item| {
+            let line = Line::from(vec![
+                Span::styled(
+                    format!("{}:", item.label),
+                    Style::default().fg(Color::LightYellow),
+                ),
+                Span::raw(" "),
+                Span::styled(item.value.clone(), Style::default().fg(Color::White)),
+            ]);
+            ListItem::new(line)
+        })
+        .collect();
+    let list = List::new(list_items)
+        .block(Block::default().borders(Borders::ALL).title("Selected Packages"));
+    f.render_widget(list, layout[4]);
 }
 
 pub fn run_browser_selector(

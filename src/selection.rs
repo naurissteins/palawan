@@ -175,6 +175,47 @@ pub fn selection_from_flags_for_npm(
     selection
 }
 
+pub fn labels_for_selection(selection: &PackageSelection, choices: &[InstallChoice]) -> Vec<String> {
+    let mut labels = Vec::new();
+    for choice in choices {
+        if choice_selected(selection, choice) {
+            labels.push(choice.label.to_string());
+        }
+    }
+    labels
+}
+
+pub fn labels_for_npm_selection(selection: &NpmSelection, choices: &[NpmChoice]) -> Vec<String> {
+    let mut labels = Vec::new();
+    for choice in choices {
+        let mut matched = true;
+        for pkg in choice.packages {
+            if !selection.packages.iter().any(|installed| installed == pkg) {
+                matched = false;
+                break;
+            }
+        }
+        if matched {
+            labels.push(choice.label.to_string());
+        }
+    }
+    labels
+}
+
+fn choice_selected(selection: &PackageSelection, choice: &InstallChoice) -> bool {
+    for pkg in choice.pacman {
+        if !selection.pacman.iter().any(|installed| installed == pkg) {
+            return false;
+        }
+    }
+    for pkg in choice.yay {
+        if !selection.yay.iter().any(|installed| installed == pkg) {
+            return false;
+        }
+    }
+    !choice.pacman.is_empty() || !choice.yay.is_empty()
+}
+
 fn extend_unique(target: &mut Vec<String>, values: &[&str]) {
     for value in values {
         if !target.iter().any(|existing| existing == value) {

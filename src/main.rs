@@ -21,6 +21,14 @@ use ratatui::Terminal;
 use crate::installer::{ensure_sudo, run_installer, start_sudo_keepalive, sudo_available, STEP_NAMES};
 use crate::model::{App, InstallerEvent, Step, StepStatus};
 use crate::packages::{load_base_packages, load_hyprland_packages, parse_packages_arg};
+use crate::selection::{
+    labels_for_npm_selection,
+    labels_for_selection,
+    BROWSER_CHOICES,
+    CODING_AGENT_CHOICES,
+    EDITOR_CHOICES,
+    TERMINAL_CHOICES,
+};
 use crate::ui::{
     draw_ui,
     run_browser_selector,
@@ -28,7 +36,10 @@ use crate::ui::{
     run_editor_selector,
     run_nvm_selector,
     run_nvidia_selector,
+    run_review,
     run_terminal_selector,
+    ReviewAction,
+    ReviewItem,
     SPINNER_LEN,
 };
 use crate::drivers::{
@@ -74,46 +85,114 @@ fn main() -> Result<()> {
     let driver_packages = driver_packages(&gpu_vendors, nvidia_variant);
     extend_unique(&mut packages, &driver_packages);
 
-    let browser_selection = match run_browser_selector(&mut terminal)? {
-        Some(selection) => selection,
-        None => {
-            disable_raw_mode().context("disable raw mode")?;
-            let _ = clear_screen();
-            return Ok(());
+    let format_labels = |labels: Vec<String>| {
+        if labels.is_empty() {
+            "None".to_string()
+        } else {
+            labels.join(", ")
         }
     };
-    let terminal_selection = match run_terminal_selector(&mut terminal)? {
-        Some(selection) => selection,
-        None => {
-            disable_raw_mode().context("disable raw mode")?;
-            let _ = clear_screen();
-            return Ok(());
-        }
-    };
-    let editor_selection = match run_editor_selector(&mut terminal)? {
-        Some(selection) => selection,
-        None => {
-            disable_raw_mode().context("disable raw mode")?;
-            let _ = clear_screen();
-            return Ok(());
-        }
-    };
-    let install_nvm = match run_nvm_selector(&mut terminal)? {
-        Some(selection) => selection,
-        None => {
-            disable_raw_mode().context("disable raw mode")?;
-            let _ = clear_screen();
-            return Ok(());
-        }
-    };
-    let coding_agent_selection = match run_coding_agent_selector(&mut terminal)? {
-        Some(selection) => selection,
-        None => {
-            disable_raw_mode().context("disable raw mode")?;
-            let _ = clear_screen();
-            return Ok(());
-        }
-    };
+
+    let (browser_selection, terminal_selection, editor_selection, install_nvm, coding_agent_selection) =
+        loop {
+            let browser_selection = match run_browser_selector(&mut terminal)? {
+                Some(selection) => selection,
+                None => {
+                    disable_raw_mode().context("disable raw mode")?;
+                    let _ = clear_screen();
+                    return Ok(());
+                }
+            };
+            let terminal_selection = match run_terminal_selector(&mut terminal)? {
+                Some(selection) => selection,
+                None => {
+                    disable_raw_mode().context("disable raw mode")?;
+                    let _ = clear_screen();
+                    return Ok(());
+                }
+            };
+            let editor_selection = match run_editor_selector(&mut terminal)? {
+                Some(selection) => selection,
+                None => {
+                    disable_raw_mode().context("disable raw mode")?;
+                    let _ = clear_screen();
+                    return Ok(());
+                }
+            };
+            let install_nvm = match run_nvm_selector(&mut terminal)? {
+                Some(selection) => selection,
+                None => {
+                    disable_raw_mode().context("disable raw mode")?;
+                    let _ = clear_screen();
+                    return Ok(());
+                }
+            };
+            let coding_agent_selection = match run_coding_agent_selector(&mut terminal)? {
+                Some(selection) => selection,
+                None => {
+                    disable_raw_mode().context("disable raw mode")?;
+                    let _ = clear_screen();
+                    return Ok(());
+                }
+            };
+
+            let review_items = vec![
+                ReviewItem {
+                    label: "Web browsers".to_string(),
+                    value: format_labels(labels_for_selection(
+                        &browser_selection,
+                        &BROWSER_CHOICES,
+                    )),
+                },
+                ReviewItem {
+                    label: "Terminals".to_string(),
+                    value: format_labels(labels_for_selection(
+                        &terminal_selection,
+                        &TERMINAL_CHOICES,
+                    )),
+                },
+                ReviewItem {
+                    label: "Editors".to_string(),
+                    value: format_labels(labels_for_selection(
+                        &editor_selection,
+                        &EDITOR_CHOICES,
+                    )),
+                },
+                ReviewItem {
+                    label: "Install nvm".to_string(),
+                    value: if install_nvm {
+                        "Yes".to_string()
+                    } else {
+                        "No".to_string()
+                    },
+                },
+                ReviewItem {
+                    label: "Coding agents".to_string(),
+                    value: format_labels(labels_for_npm_selection(
+                        &coding_agent_selection,
+                        &CODING_AGENT_CHOICES,
+                    )),
+                },
+            ];
+
+            match run_review(&mut terminal, &review_items)? {
+                ReviewAction::Confirm => {
+                    break (
+                        browser_selection,
+                        terminal_selection,
+                        editor_selection,
+                        install_nvm,
+                        coding_agent_selection,
+                    )
+                }
+                ReviewAction::Edit => continue,
+                ReviewAction::Quit => {
+                    disable_raw_mode().context("disable raw mode")?;
+                    let _ = clear_screen();
+                    return Ok(());
+                }
+            }
+        };
 
     let mut sudo_verified = sudo_available();
     let mut sudo_keepalive = if sudo_verified {
