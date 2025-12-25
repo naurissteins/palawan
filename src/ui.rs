@@ -408,13 +408,21 @@ fn draw_review(area: Rect, f: &mut Frame<'_>, items: &[ReviewItem]) {
 
 pub fn run_browser_selector(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    initial: Option<&[bool]>,
 ) -> Result<Option<PackageSelection>> {
     if BROWSER_CHOICES.is_empty() {
         return Ok(Some(PackageSelection::default()));
     }
 
-    let mut cursor: usize = 0;
     let mut selected = vec![false; BROWSER_CHOICES.len()];
+    if let Some(flags) = initial {
+        for (idx, flag) in flags.iter().copied().enumerate() {
+            if let Some(target) = selected.get_mut(idx) {
+                *target = flag;
+            }
+        }
+    }
+    let mut cursor = selected.iter().position(|flag| *flag).unwrap_or(0);
     loop {
         terminal.draw(|f| draw_browser_selector(f.size(), f, cursor, &selected))?;
 
@@ -602,13 +610,21 @@ fn draw_terminal_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected
 
 pub fn run_terminal_selector(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    initial: Option<&[bool]>,
 ) -> Result<Option<PackageSelection>> {
     if TERMINAL_CHOICES.is_empty() {
         return Ok(Some(PackageSelection::default()));
     }
 
-    let mut cursor: usize = 0;
     let mut selected = vec![false; TERMINAL_CHOICES.len()];
+    if let Some(flags) = initial {
+        for (idx, flag) in flags.iter().copied().enumerate() {
+            if let Some(target) = selected.get_mut(idx) {
+                *target = flag;
+            }
+        }
+    }
+    let mut cursor = selected.iter().position(|flag| *flag).unwrap_or(0);
     loop {
         terminal.draw(|f| draw_terminal_selector(f.size(), f, cursor, &selected))?;
 
@@ -816,13 +832,21 @@ fn draw_editor_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, selected: 
 
 pub fn run_editor_selector(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    initial: Option<&[bool]>,
 ) -> Result<Option<PackageSelection>> {
     if EDITOR_CHOICES.is_empty() {
         return Ok(Some(PackageSelection::default()));
     }
 
-    let mut cursor: usize = 0;
     let mut selected = vec![false; EDITOR_CHOICES.len()];
+    if let Some(flags) = initial {
+        for (idx, flag) in flags.iter().copied().enumerate() {
+            if let Some(target) = selected.get_mut(idx) {
+                *target = flag;
+            }
+        }
+    }
+    let mut cursor = selected.iter().position(|flag| *flag).unwrap_or(0);
     loop {
         terminal.draw(|f| draw_editor_selector(f.size(), f, cursor, &selected))?;
 
@@ -950,9 +974,14 @@ fn draw_nvm_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, options: &[&s
 
 pub fn run_nvm_selector(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    initial: Option<bool>,
 ) -> Result<Option<bool>> {
     let options = ["Yes", "No"];
-    let mut cursor: usize = 0;
+    let mut cursor: usize = match initial {
+        Some(true) => 0,
+        Some(false) => 1,
+        None => 0,
+    };
     loop {
         terminal.draw(|f| draw_nvm_selector(f.size(), f, cursor, &options))?;
 
@@ -1121,13 +1150,21 @@ fn draw_coding_agent_selector(area: Rect, f: &mut Frame<'_>, cursor: usize, sele
 
 pub fn run_coding_agent_selector(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    initial: Option<&[bool]>,
 ) -> Result<Option<NpmSelection>> {
     if CODING_AGENT_CHOICES.is_empty() {
         return Ok(Some(NpmSelection::default()));
     }
 
-    let mut cursor: usize = 0;
     let mut selected = vec![false; CODING_AGENT_CHOICES.len()];
+    if let Some(flags) = initial {
+        for (idx, flag) in flags.iter().copied().enumerate() {
+            if let Some(target) = selected.get_mut(idx) {
+                *target = flag;
+            }
+        }
+    }
+    let mut cursor = selected.iter().position(|flag| *flag).unwrap_or(0);
     loop {
         terminal.draw(|f| draw_coding_agent_selector(f.size(), f, cursor, &selected))?;
 

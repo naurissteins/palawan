@@ -202,6 +202,25 @@ pub fn labels_for_npm_selection(selection: &NpmSelection, choices: &[NpmChoice])
     labels
 }
 
+pub fn flags_for_selection(selection: &PackageSelection, choices: &[InstallChoice]) -> Vec<bool> {
+    choices
+        .iter()
+        .map(|choice| choice_selected(selection, choice))
+        .collect()
+}
+
+pub fn flags_for_npm_selection(selection: &NpmSelection, choices: &[NpmChoice]) -> Vec<bool> {
+    choices
+        .iter()
+        .map(|choice| {
+            choice
+                .packages
+                .iter()
+                .all(|pkg| selection.packages.iter().any(|installed| installed == pkg))
+        })
+        .collect()
+}
+
 fn choice_selected(selection: &PackageSelection, choice: &InstallChoice) -> bool {
     for pkg in choice.pacman {
         if !selection.pacman.iter().any(|installed| installed == pkg) {

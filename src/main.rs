@@ -22,8 +22,12 @@ use crate::installer::{ensure_sudo, run_installer, start_sudo_keepalive, sudo_av
 use crate::model::{App, InstallerEvent, Step, StepStatus};
 use crate::packages::{load_base_packages, load_hyprland_packages, parse_packages_arg};
 use crate::selection::{
+    flags_for_npm_selection,
+    flags_for_selection,
     labels_for_npm_selection,
     labels_for_selection,
+    NpmSelection,
+    PackageSelection,
     BROWSER_CHOICES,
     CODING_AGENT_CHOICES,
     EDITOR_CHOICES,
@@ -93,9 +97,24 @@ fn main() -> Result<()> {
         }
     };
 
+    let mut last_browser_selection = PackageSelection::default();
+    let mut last_terminal_selection = PackageSelection::default();
+    let mut last_editor_selection = PackageSelection::default();
+    let mut last_install_nvm = false;
+    let mut last_coding_agent_selection = NpmSelection::default();
+    let mut has_previous = false;
+
     let (browser_selection, terminal_selection, editor_selection, install_nvm, coding_agent_selection) =
         loop {
-            let browser_selection = match run_browser_selector(&mut terminal)? {
+            let browser_flags = if has_previous {
+                Some(flags_for_selection(&last_browser_selection, &BROWSER_CHOICES))
+            } else {
+                None
+            };
+            let browser_selection = match run_browser_selector(
+                &mut terminal,
+                browser_flags.as_deref(),
+            )? {
                 Some(selection) => selection,
                 None => {
                     disable_raw_mode().context("disable raw mode")?;
@@ -103,7 +122,15 @@ fn main() -> Result<()> {
                     return Ok(());
                 }
             };
-            let terminal_selection = match run_terminal_selector(&mut terminal)? {
+            let terminal_flags = if has_previous {
+                Some(flags_for_selection(&last_terminal_selection, &TERMINAL_CHOICES))
+            } else {
+                None
+            };
+            let terminal_selection = match run_terminal_selector(
+                &mut terminal,
+                terminal_flags.as_deref(),
+            )? {
                 Some(selection) => selection,
                 None => {
                     disable_raw_mode().context("disable raw mode")?;
@@ -111,7 +138,24 @@ fn main() -> Result<()> {
                     return Ok(());
                 }
             };
-            let editor_selection = match run_editor_selector(&mut terminal)? {
+            let editor_flags = if has_previous {
+                Some(flags_for_selection(&last_editor_selection, &EDITOR_CHOICES))
+            } else {
+                None
+            };
+            let editor_selection =
+                match run_editor_selector(&mut terminal, editor_flags.as_deref())? {
+                    Some(selection) => selection,
+                    None => {
+                        disable_raw_mode().context("disable raw mode")?;
+                        let _ = clear_screen();
+                        return Ok(());
+                    }
+                };
+            let install_nvm = match run_nvm_selector(
+                &mut terminal,
+                has_previous.then_some(last_install_nvm),
+            )? {
                 Some(selection) => selection,
                 None => {
                     disable_raw_mode().context("disable raw mode")?;
@@ -119,7 +163,18 @@ fn main() -> Result<()> {
                     return Ok(());
                 }
             };
-            let install_nvm = match run_nvm_selector(&mut terminal)? {
+            let coding_flags = if has_previous {
+                Some(flags_for_npm_selection(
+                    &last_coding_agent_selection,
+                    &CODING_AGENT_CHOICES,
+                ))
+            } else {
+                None
+            };
+            let coding_agent_selection = match run_coding_agent_selector(
+                &mut terminal,
+                coding_flags.as_deref(),
+            )? {
                 Some(selection) => selection,
                 None => {
                     disable_raw_mode().context("disable raw mode")?;
@@ -127,14 +182,13 @@ fn main() -> Result<()> {
                     return Ok(());
                 }
             };
-            let coding_agent_selection = match run_coding_agent_selector(&mut terminal)? {
-                Some(selection) => selection,
-                None => {
-                    disable_raw_mode().context("disable raw mode")?;
-                    let _ = clear_screen();
-                    return Ok(());
-                }
-            };
+
+            last_browser_selection = browser_selection.clone();
+            last_terminal_selection = terminal_selection.clone();
+            last_editor_selection = editor_selection.clone();
+            last_install_nvm = install_nvm;
+            last_coding_agent_selection = coding_agent_selection.clone();
+            has_previous = true;
 
             let review_items = vec![
                 ReviewItem {
