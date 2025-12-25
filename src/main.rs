@@ -266,6 +266,11 @@ fn main() -> Result<()> {
     let (tx, rx) = crossbeam_channel::unbounded();
     let (sudo_tx, sudo_rx) = crossbeam_channel::bounded(1);
 
+    let browser_selection_for_install = browser_selection.clone();
+    let terminal_selection_for_install = terminal_selection.clone();
+    let editor_selection_for_install = editor_selection.clone();
+    let coding_agent_selection_for_install = coding_agent_selection.clone();
+
     let installer_tx = tx.clone();
     thread::spawn(move || {
         if let Err(err) = run_installer(
@@ -273,17 +278,35 @@ fn main() -> Result<()> {
             sudo_rx,
             packages,
             hyprland_packages,
-            browser_selection,
-            terminal_selection,
-            editor_selection,
+            browser_selection_for_install,
+            terminal_selection_for_install,
+            editor_selection_for_install,
             install_nvm,
-            coding_agent_selection,
+            coding_agent_selection_for_install,
         ) {
             let _ = tx.send(InstallerEvent::Done(Some(err.to_string())));
         }
     });
 
     clear_screen()?;
+    let mut step_names: Vec<String> = STEP_NAMES.iter().map(|name| (*name).to_string()).collect();
+    let browser_labels = labels_for_selection(&browser_selection, &BROWSER_CHOICES);
+    if !browser_labels.is_empty() {
+        step_names[3] = format!("Installing {}", browser_labels.join(", "));
+    }
+    let terminal_labels = labels_for_selection(&terminal_selection, &TERMINAL_CHOICES);
+    if !terminal_labels.is_empty() {
+        step_names[4] = format!("Installing {}", terminal_labels.join(", "));
+    }
+    let editor_labels = labels_for_selection(&editor_selection, &EDITOR_CHOICES);
+    if !editor_labels.is_empty() {
+        step_names[5] = format!("Installing {}", editor_labels.join(", "));
+    }
+    let coding_agent_labels = labels_for_npm_selection(&coding_agent_selection, &CODING_AGENT_CHOICES);
+    if !coding_agent_labels.is_empty() {
+        step_names[7] = format!("Installing {}", coding_agent_labels.join(", "));
+    }
+
     let mut logs = VecDeque::from(vec!["Starting Palawan installer...".to_string()]);
     if sudo_verified {
         logs.push_back("Sudo verified.".to_string());
@@ -297,10 +320,10 @@ fn main() -> Result<()> {
     }
 
     let mut app = App {
-        steps: STEP_NAMES
+        steps: step_names
             .iter()
             .map(|name| Step {
-                name: (*name).to_string(),
+                name: name.to_string(),
                 status: StepStatus::Pending,
                 err: None,
             })
