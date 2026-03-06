@@ -46,5 +46,3 @@ Adding a new chooser step
 Development overrides
 - `PALAWAN_DEV_GPU=amd|intel|nvidia` (comma-separated supported) forces GPU detection for testing.
   - Example: `PALAWAN_DEV_GPU=nvidia,intel ./target/release/palawan-installer`
-
-- Done 2
