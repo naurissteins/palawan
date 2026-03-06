@@ -13,6 +13,7 @@ qt6-wayland
 hyprlock
 hyprpicker
 hyprpaper
+hyprtoolkit
 hypridle
 hyprland-guiutils
 hyprsunset
